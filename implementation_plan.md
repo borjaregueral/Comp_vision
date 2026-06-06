@@ -153,9 +153,11 @@ Aquí el sistema pasa de "detecta daños" a "estima coste". Es lo que justifica 
 Sin esto, no sabes si el sistema funciona en producción.
 
 ### T3.1 — Definición del golden set
-- [ ] Documentar en `golden_set/README.md`: criterios de selección (500-1.000 siniestros cerrados de parking, importes <1.500€, último año), fuentes (extracto de cartera Mutua), proceso de anonimización.
-- [ ] Definir esquema de ground truth: archivo JSON por siniestro con campos canónicos (importe final pagado, piezas reparadas/sustituidas, horas reales, decisión final del perito, severidad oficial).
+- [x] Documentar en `golden_set/README.md`: criterios de selección (500-1.000 siniestros cerrados de parking, importes <1.500€, último año), fuentes (extracto de cartera Mutua), proceso de anonimización.
+- [x] Definir esquema de ground truth: archivo JSON por siniestro con campos canónicos (importe final pagado, piezas reparadas/sustituidas, horas reales, decisión final del perito, severidad oficial).
 - [ ] **Esta tarea es coordinación con Mutua, no código**. Bloquea T3.2.
+      ✓ 2026-06-06 (spec) · `schemas/ground_truth_v1.json`: esquema canónico del GT (importe_final_pagado=target MAE, severidad_oficial, es_estructural, decision_final, piezas, horas_reales, vehiculo, fecha_cierre). **`additionalProperties:false` en todos los niveles** → la PII (matrícula/nombre) hace fallar la validación (verificado: GT válido pasa, GT con matrícula se rechaza). `golden_set/README.md`: criterios de selección + estratificación por tramo, layout, **proceso de anonimización** (EXIF/matrícula/pseudónimo/cifrado fuera del repo), mapeo `decision_final`↔carril, gobernanza (data_lineage + RGPD). `golden_set/` gitignored salvo README/.gitkeep.
+      ⏳ PENDIENTE (coordinación, no código): **obtención del extracto real de cartera de Mutua** y su anonimización. La spec ya desbloquea construir/testear T3.2 con datos sintéticos.
 
 ### T3.2 — Carga y validación del golden set
 - [ ] Crear `scripts/load_golden_set.py`.
