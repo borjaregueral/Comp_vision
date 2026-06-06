@@ -184,12 +184,16 @@ Sin esto, no sabes si el sistema funciona en producción.
 > **SPRINT 3 iniciado parcialmente** (2026-06-06): T3.3 ✅ (desbloqueada). Pendientes: T3.1 (definición golden set, coordinación con Mutua — no código), T3.2 (carga, depende de T3.1), T3.4 (calibración), T3.5 (eval v1.0, depende de `best.pt` + golden real).
 
 ### T3.4 — Calibración de confianza
-- [ ] Crear `scripts/calibrate_confidence.py`.
-- [ ] Sobre el golden set (o validation si golden no está aún): construir curva de calibración (reliability diagram).
-- [ ] Aplicar isotonic regression o Platt scaling sobre las confianzas de salida del modelo.
-- [ ] Guardar el calibrador como `models/baseline_v1.0/confidence_calibrator.pkl`.
-- [ ] Integrar en `predict.py` (vía opción `--calibrate`) sin reentrenar el modelo.
+- [x] Crear `scripts/calibrate_confidence.py`.
+- [x] Sobre el golden set (o validation si golden no está aún): construir curva de calibración (reliability diagram).
+- [x] Aplicar isotonic regression o Platt scaling sobre las confianzas de salida del modelo.
+- [x] Guardar el calibrador como `models/baseline_v1.0/confidence_calibrator.pkl`.
+- [x] Integrar en `predict.py` (vía opción `--calibrate`) sin reentrenar el modelo.
 - **Tests**: confianzas tras calibrar tienen Brier score menor o igual que sin calibrar sobre validation.
+      ✓ 2026-06-07 · `scripts/calibrate_confidence.py`: `ConfidenceCalibrator(method)` (isotonic/Platt) con `fit/transform`, `save/load` (pickle), `reliability_curve`, `brier_score`, `expected_calibration_error`, `plot_reliability` (PNG). `predict.py`: `run_inference(..., calibrator=None)` aplica la calibración y conserva `confidence_raw`; flags CLI `--calibrate`/`--calibrator` (backward-compatible, default None → sin cambios; no rompe assess_claim). Config en `configs/calibration.yaml` (método, bins, ruta). Calibrador `.pkl` gitignored. `tests/test_calibrate_confidence.py`: 11 tests (**Brier calibrado ≤ crudo en holdout** + garantía in-sample, save/load roundtrip, Platt en [0,1], reliability/ECE, plot PNG, errores), todos verdes; cobertura módulo 93%. Suite completa 157/157.
+      ⚠ Probado con datos sintéticos descalibrados; el calibrador real se ajusta en T3.5 (golden/validation + `best.pt`).
+
+> **SPRINT 3 — hasta donde llega sin datos reales** (2026-06-07): T3.1 (spec) ✅, T3.2 ✅, T3.3 ✅, T3.4 ✅. **T3.5 bloqueada**: requiere `best.pt` (GPU remota, T0.1 ⏸) + golden set real (coordinación Mutua).
 
 ### T3.5 — Evaluación de la versión 1.0 contra el golden set
 - [ ] Ejecutar `business_metrics.py` sobre el golden set completo con el modelo `baseline_v1.0`.
