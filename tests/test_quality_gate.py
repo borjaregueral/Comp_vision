@@ -21,11 +21,15 @@ import quality_gate as qg  # noqa: E402
 # ── Vehicle-detector stubs (keep tests offline) ──────────────────────
 
 def _vehicle_present(_image):
-    return {"vehicle_detected": True, "vehicle_area_fraction": 0.42, "n_vehicles": 1}
+    # bbox spans the textured region of the synthetic fixtures so ROI-based
+    # sharpness sees the checkerboard, not a flat corner.
+    return {"vehicle_detected": True, "vehicle_area_fraction": 0.42,
+            "n_vehicles": 1, "bbox": [40, 40, 760, 560]}
 
 
 def _vehicle_absent(_image):
-    return {"vehicle_detected": False, "vehicle_area_fraction": 0.0, "n_vehicles": 0}
+    return {"vehicle_detected": False, "vehicle_area_fraction": 0.0,
+            "n_vehicles": 0, "bbox": None}
 
 
 @pytest.fixture
@@ -181,6 +185,7 @@ def test_detect_vehicle_present_with_fake_model_detects_car():
     assert out["vehicle_detected"] is True
     assert out["n_vehicles"] == 1
     assert out["vehicle_area_fraction"] == pytest.approx(0.25, abs=0.01)
+    assert out["bbox"] == [100, 100, 500, 400]
 
 
 def test_detect_vehicle_present_small_box_below_area_threshold():
@@ -189,6 +194,47 @@ def test_detect_vehicle_present_small_box_below_area_threshold():
     boxes = _FakeBoxes(cls=[2], conf=[0.9], xyxy=[[0, 0, 80, 60]])
     out = qg.detect_vehicle_present(image, model=_FakeModel(boxes))
     assert out["vehicle_detected"] is False
+
+
+def test_detect_vehicle_present_overlapping_boxes_use_union_area():
+    """#4: two overlapping boxes of the same car count once (union), not summed."""
+    image = np.zeros((600, 800, 3), dtype=np.uint8)
+    # Two identical boxes (each ~25%). Summed would be ~0.50; union is ~0.25.
+    boxes = _FakeBoxes(
+        cls=[2, 2], conf=[0.9, 0.85],
+        xyxy=[[100, 100, 500, 400], [100, 100, 500, 400]],
+    )
+    out = qg.detect_vehicle_present(image, model=_FakeModel(boxes))
+    assert out["n_vehicles"] == 2
+    assert out["vehicle_area_fraction"] == pytest.approx(0.25, abs=0.01)
+    assert out["vehicle_area_fraction"] <= 1.0
+    assert out["bbox"] == [100, 100, 500, 400]
+
+
+# ── Sharpness ROI (#1) ───────────────────────────────────────────────
+
+def test_assess_sharpness_roi_focuses_on_region(synthetic_image, config):
+    """Sharpness over the textured region is high; over a flat corner is ~0."""
+    min_var = config["sharpness"]["laplacian_variance_min"]
+    textured = qg.assess_sharpness(synthetic_image, roi=[160, 120, 640, 480])
+    flat = qg.assess_sharpness(synthetic_image, roi=[0, 0, 80, 80])
+    assert textured > min_var
+    assert flat < min_var
+
+
+# ── Resolution orientation (#2) ──────────────────────────────────────
+
+def test_portrait_image_not_rejected_for_resolution(tmp_path, synthetic_image, config):
+    """#2: a 600x800 portrait carries the same detail as 800x600 landscape."""
+    portrait = np.transpose(synthetic_image, (1, 0, 2)).copy()  # (800, 600, 3)
+    assert portrait.shape[1] == 600 and portrait.shape[0] == 800
+    path = tmp_path / "portrait.jpg"
+    cv2.imwrite(str(path), portrait)
+    result = qg.assess_quality(
+        path, config=config, vehicle_detector=_vehicle_present, strip_exif=False,
+    )
+    assert "low_resolution" not in result["problems"]
+    assert result["valid"] is True
 
 
 # ── Error case ───────────────────────────────────────────────────────

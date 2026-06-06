@@ -9,17 +9,27 @@
 # Versionado: cualquier cambio aquí debe actualizar `version` y `effective_date`.
 # ============================================================================
 
-version: "1.0.0"
+version: "1.1.0"
 effective_date: "2026-06-06"
+# Changelog:
+#   1.1.0 (2026-06-06): sharpness.use_vehicle_roi añadido; resolución pasa a ser
+#                       orientación-independiente (long/short side). Sin cambios
+#                       en los valores numéricos de los umbrales.
+#   1.0.0 (2026-06-06): versión inicial.
 
 # ── Nitidez (varianza del Laplaciano) ──────────────────────────────────────
 # Métrica clásica de blur detection. Imagen nítida = varianza alta.
 # Umbrales calibrados sobre fotos típicas de móvil; revisar tras 100 fotos reales.
+# LIMITACIÓN: subestima en primeros planos de chapa lisa (poca textura aunque
+# esté enfocada). El umbral es bajo a propósito para no rechazar fotos buenas.
 sharpness:
   enabled: true
   blocking: true
   laplacian_variance_min: 80.0   # Por debajo: borrosa, no usable
   laplacian_variance_warn: 150.0 # Entre min y warn: aceptable pero anotar alerta
+  # Si hay vehículo detectado, medir la nitidez SOLO dentro de su bbox para que
+  # el fondo liso (asfalto, cielo) no diluya la varianza. Fallback: imagen completa.
+  use_vehicle_roi: true
 
 # ── Exposición ──────────────────────────────────────────────────────────────
 # Detecta fotos contra el sol, en sombra densa, sobreexpuestas.
@@ -35,6 +45,9 @@ exposure:
 
 # ── Resolución mínima ───────────────────────────────────────────────────────
 # Por debajo no hay píxeles suficientes para detectar daños finos.
+# Orientación-independiente: se compara el lado largo de la imagen contra
+# max(min_width, min_height) y el lado corto contra min(min_width, min_height).
+# Así una foto vertical 600x800 y su versión horizontal 800x600 se tratan igual.
 resolution:
   enabled: true
   blocking: true
