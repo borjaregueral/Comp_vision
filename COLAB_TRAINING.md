@@ -5,6 +5,20 @@ necesita GPU. En MPS local es inviable (días). Usa Colab (T4 gratis, o A100/L4 
 
 El notebook [`notebooks/train_colab.ipynb`](notebooks/train_colab.ipynb) lo automatiza de principio a fin.
 
+### ¿Prefieres no usar notebook? → caja GPU por SSH
+
+Si alquilas una caja GPU (RunPod, Vast.ai, Lambda…) y entras por SSH, usa
+[`setup_gpu.sh`](setup_gpu.sh): instala dependencias, genera el dataset y lanza
+el entrenamiento en `tmux` (sigue corriendo aunque cierres el SSH). Tres comandos:
+
+```bash
+git clone https://github.com/borjaregueral/Comp_vision.git && cd Comp_vision
+mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/      # tu token de Kaggle (para VehiDE)
+bash setup_gpu.sh --batch 16 --imgsz 1024
+```
+
+Tu Mac queda libre mientras entrena; al terminar te traes `best.pt` con `scp`.
+
 ---
 
 ## TL;DR
