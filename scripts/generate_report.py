@@ -18,6 +18,7 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -35,7 +36,7 @@ console = Console()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def image_to_base64(image_path: Path = None, cv2_image: np.ndarray = None) -> str:
+def image_to_base64(image_path: Optional[Path] = None, cv2_image: Optional[np.ndarray] = None) -> str:
     """Convierte una imagen a string base64."""
     if cv2_image is not None:
         _, buffer = cv2.imencode(".jpg", cv2_image, [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -87,7 +88,7 @@ def generate_html_report(
         conf_color = "#2ecc71" if d["confidence"] > 0.7 else ("#f39c12" if d["confidence"] > 0.4 else "#e74c3c")
         # Celda de zona (solo si se localizó con el modelo de partes)
         if "zone" in d:
-            zlabel = zone_labels.get(d["zone"], d["zone"])
+            zlabel = zone_labels.get(d["zone"], d["zone"]) or d["zone"]
             if d.get("side_uncertain") and d["zone"] not in ("unknown",):
                 zlabel += ' <span style="color:#f39c12" title="lado no determinado con certeza">⚠</span>'
             zone_cell = f"<td>{zlabel}</td>"
@@ -480,6 +481,7 @@ def main():
     # Importar predict.py para reutilizar funciones
     sys.path.insert(0, str(Path(__file__).parent))
     from predict import run_inference, draw_visualization, find_images
+    import localize
 
     from ultralytics import YOLO
 
@@ -498,7 +500,6 @@ def main():
     parts_model = None
     parts_cfg = None
     if args.parts_model:
-        import localize
         if not Path(args.parts_model).exists():
             log.error("Modelo de partes no encontrado: %s", args.parts_model)
             sys.exit(1)
@@ -516,7 +517,7 @@ def main():
         report = run_inference(model, img_path, args.conf, imgsz=args.imgsz)
 
         # Localización por zona (si hay modelo de partes)
-        if parts_model is not None:
+        if parts_model is not None and parts_cfg is not None:
             report = localize.enrich_report_with_zones(report, img_path, parts_model, parts_cfg)
 
         # Imágenes
