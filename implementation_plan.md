@@ -165,16 +165,20 @@ Sin esto, no sabes si el sistema funciona en producción.
 - **Tests**: rechaza entradas con campos faltantes; estratifica correctamente.
 
 ### T3.3 — Métricas de negocio
-- [ ] Crear `scripts/business_metrics.py`.
-- [ ] Implementar:
+- [x] Crear `scripts/business_metrics.py`.
+- [x] Implementar:
   - **MAE en €**: por carril (debe medirse solo en verde + ámbar), por tramo de importe.
   - **% casos en carril verde**: sobre el total y sobre los liquidables.
   - **Tasa de FN en daño estructural sospechado**: contra ground truth.
   - **Cohen's weighted kappa**: clasificación de severidad modelo vs perito.
   - **% estimaciones dentro de ±15% del valor real**.
   - **Tiempo medio de procesamiento** por siniestro.
-- [ ] Reporte HTML autocontenido en `eval_business/report_{fecha}.html` con tablas, intervalos de confianza (bootstrap), y gráficos.
+- [x] Reporte HTML autocontenido en `eval_business/report_{fecha}.html` con tablas, intervalos de confianza (bootstrap), y gráficos.
 - **Tests**: sobre un golden set sintético de 20 casos, todas las métricas se calculan sin error y devuelven valores en rangos esperables.
+      ✓ 2026-06-06 · `scripts/business_metrics.py`: las 6 métricas + MAE por tramo, todas con **IC 95% por bootstrap** (semilla fija → determinista). MAE/within solo en verde+ámbar (rojo va a peritaje). `record_from_output(output, gt)` adaptador para T3.5. `generate_html_report` → HTML **autocontenido** (tablas, IC, gráficos matplotlib en base64, pass/fail vs objetivos). Objetivos en `configs/business_metrics.yaml` (no alteran el cálculo, solo se muestran). `tests/test_business_metrics.py`: 12 tests (MAE excluye rojo, %verde total/liquidables, FN cuenta perdidos y no-cuenta si va a rojo, kappa perfecto=1, within±15%, adaptador, **20 casos sintéticos sin error + IC bracketea el punto**, HTML autocontenido), todos verdes; cobertura módulo 96%. Reportes en `eval_business/*.html` gitignored (artefactos). Suite completa 137/137.
+      ⚠ Nota honesta: probado con golden set **sintético**; NO es rendimiento real del modelo (eso es T3.5 con `best.pt` + golden real).
+
+> **SPRINT 3 iniciado parcialmente** (2026-06-06): T3.3 ✅ (desbloqueada). Pendientes: T3.1 (definición golden set, coordinación con Mutua — no código), T3.2 (carga, depende de T3.1), T3.4 (calibración), T3.5 (eval v1.0, depende de `best.pt` + golden real).
 
 ### T3.4 — Calibración de confianza
 - [ ] Crear `scripts/calibrate_confidence.py`.
