@@ -19,14 +19,14 @@ Antes de tocar nada, verifica el estado del entrenamiento y prepara la infraestr
 - [x] Crear `schemas/`, `logs/`, `model_cards/`, `business_rules/`, `tests/`, `golden_set/` (gitignored), `eval_business/`.
 - [x] Añadir `.gitkeep` donde proceda.
 - [x] Actualizar `.gitignore` con `golden_set/`, `logs/`, `models/*/best.pt`.
-      ✓ 2026-06-06 · `schemas/` y `business_rules/` ya existían (commit 61ae209); creados `logs/`, `model_cards/`, `tests/`, `golden_set/`, `eval_business/` con `.gitkeep`. `.gitignore`: `golden_set/*` y `logs/*` (con negación para `.gitkeep`/`README.md`) + `models/*/best.pt` y `models/*/last.pt`. Verificado con `git check-ignore`. (commit pendiente)
+      ✓ 2026-06-06 · `schemas/` y `business_rules/` ya existían (commit 61ae209); creados `logs/`, `model_cards/`, `tests/`, `golden_set/`, `eval_business/` con `.gitkeep`. `.gitignore`: `golden_set/*` y `logs/*` (con negación para `.gitkeep`/`README.md`) + `models/*/best.pt` y `models/*/last.pt`. Verificado con `git check-ignore`. (commit f932679)
 
 ### T0.3 — Setup de testing
 - [x] Añadir `pytest`, `pytest-cov`, `jsonschema` a `requirements.txt`.
 - [x] Crear `tests/conftest.py` con fixtures básicas (imagen sintética, predicción mock, metadata mock).
 - [x] Configurar `pyproject.toml` o `pytest.ini` para ejecutar con `pytest tests/`.
 - **Tests**: `pytest --collect-only` debe descubrir la carpeta sin errores.
-      ✓ 2026-06-06 · venv gestionado con `uv` (sin pip): pytest 9.0.3 + pytest-cov 7.1.0 instalados con `uv pip`. `pytest.ini` con `testpaths=tests`. `conftest.py` con fixtures (imagen sintética + variantes borrosa/oscura para T1.1, predicción mock = contrato de `predict.run_inference`, metadata mock = campos de `lane_rules.yaml`). `tests/test_fixtures_smoke.py`: 5 tests, todos verdes. `pytest --collect-only` OK. (commit pendiente)
+      ✓ 2026-06-06 · venv gestionado con `uv` (sin pip): pytest 9.0.3 + pytest-cov 7.1.0 instalados con `uv pip`. `pytest.ini` con `testpaths=tests`. `conftest.py` con fixtures (imagen sintética + variantes borrosa/oscura para T1.1, predicción mock = contrato de `predict.run_inference`, metadata mock = campos de `lane_rules.yaml`). `tests/test_fixtures_smoke.py`: 5 tests, todos verdes. `pytest --collect-only` OK. (commit f932679)
 
 ---
 
@@ -41,15 +41,15 @@ Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cam
 - [x] Configuración en `configs/quality_gate.yaml`: umbrales por criterio.
 - **Tests**: imagen borrosa → invalid; imagen oscura → invalid; imagen OK → valid; imagen sin coche → invalid.
 - **Criterio**: `pytest tests/test_quality_gate.py` pasa al 100%.
-      ✓ 2026-06-06 · commit 7bbe0ab · `scripts/quality_gate.py` consume `configs/quality_gate.yaml` (umbrales externos, sin magic numbers). `detect_vehicle_present` con YOLO `yolo11n.pt` *lazy* e inyectable; EXIF *stripping* RGPD vía round-trip numpy. `tests/test_quality_gate.py`: 13 tests, cobertura módulo 77%. Fixture `synthetic_image` = checkerboard de alta frecuencia (nitidez=2941≫80).
-      ↻ Revisión aplicada 2026-06-06: (#2) resolución orientación-independiente (long/short side) — una vertical 600×800 ya no se rechaza; (#4) `vehicle_area_fraction` por unión de cajas (no suma, ≤1.0) + bbox de unión; (#1) nitidez medida en el ROI del vehículo (`use_vehicle_roi`), con limitación de chapa lisa documentada en YAML/model card. `quality_gate.yaml` → v1.1.0. 16 tests verdes, cobertura 79%.
+      ✓ 2026-06-06 · commit 47249c5 · `scripts/quality_gate.py` consume `configs/quality_gate.yaml` (umbrales externos, sin magic numbers). `detect_vehicle_present` con YOLO `yolo11n.pt` *lazy* e inyectable; EXIF *stripping* RGPD vía round-trip numpy. `tests/test_quality_gate.py`: 13 tests, cobertura módulo 77%. Fixture `synthetic_image` = checkerboard de alta frecuencia (nitidez=2941≫80).
+      ↻ Revisión aplicada 2026-06-06: (#2) resolución orientación-independiente (long/short side) — una vertical 600×800 ya no se rechaza; (#4) `vehicle_area_fraction` por unión de cajas (no suma, ≤1.0) + bbox de unión; (#1) nitidez medida en el ROI del vehículo (`use_vehicle_roi`), con limitación de chapa lisa documentada en YAML/model card. `quality_gate.yaml` → v1.1.0. 16 tests verdes, cobertura 79% (commit 0a56738).
 
 ### T1.2 — Schema JSON de salida v1
 - [x] Crear `schemas/inference_output_v1.json` (JSON Schema) con campos: `id_evaluacion`, `timestamp`, `version_modelo`, `quality`, `damages[]`, `zones`, `alerts[]`, `estimacion`, `lane`, `lane_reason`, `next_action`, `audit`.
 - [x] Crear `scripts/output_builder.py` que tome los outputs intermedios y los emita validados contra el schema.
 - [x] Si la validación falla, lanzar excepción explícita (no fallar silenciosamente).
 - **Tests**: output válido pasa validación; output con campo faltante falla con mensaje claro.
-      ✓ 2026-06-06 · El schema ya existía (commit 61ae209) y cubre todos los campos (nombres en inglés: `model_version`, `zones_summary`); se mantiene como fuente de verdad, sin reescribir. `scripts/output_builder.py`: `build_output()` ensambla el dict canónico (genera `id_evaluacion` `EVA-YYYYMMDD-XXXXXXXX` y `timestamp` UTC RFC3339; lee `schema_version` del propio schema), valida con `jsonschema` Draft 2020-12 (+FormatChecker) y lanza `OutputValidationError` (subclase de `ValueError`) listando cada ruta fallida. `tests/test_output_builder.py`: 10 tests (válido, id/timestamp, campo faltante top-level y anidado, enum `lane`, patrón `lane_rule_id`, `additionalProperties`, skip-validate), todos verdes; cobertura módulo 92%. (commit pendiente)
+      ✓ 2026-06-06 · El schema ya existía (commit 61ae209) y cubre todos los campos (nombres en inglés: `model_version`, `zones_summary`); se mantiene como fuente de verdad, sin reescribir. `scripts/output_builder.py`: `build_output()` ensambla el dict canónico (genera `id_evaluacion` `EVA-YYYYMMDD-XXXXXXXX` y `timestamp` UTC RFC3339; lee `schema_version` del propio schema), valida con `jsonschema` Draft 2020-12 (+FormatChecker) y lanza `OutputValidationError` (subclase de `ValueError`) listando cada ruta fallida. `tests/test_output_builder.py`: 10 tests (válido, id/timestamp, campo faltante top-level y anidado, enum `lane`, patrón `lane_rule_id`, `additionalProperties`, skip-validate), todos verdes; cobertura módulo 92%. (commit 8cb2159)
 
 ### T1.3 — Triaje determinista (verde/ámbar/rojo)
 - [ ] Crear `scripts/triage.py` y `business_rules/lane_rules.yaml`.

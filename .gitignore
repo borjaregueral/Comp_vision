@@ -35,6 +35,12 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 
+# ── Testing / coverage artefactos ────────────────────────────────
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
 # ── Credenciales / secretos ──────────────────────────────────────
 .env
 kaggle.json
