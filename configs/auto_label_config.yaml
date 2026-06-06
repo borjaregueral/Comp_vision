@@ -1,0 +1,53 @@
+# ============================================
+# Auto-Labeling Config — GroundingDINO + SAM2
+# ============================================
+
+# --- Ontología de prompts por clase ---
+# Cada entrada mapea prompts descriptivos → clase objetivo
+# Múltiples frases separadas por ' . ' mejoran la detección
+ontology:
+  dent:
+    prompts: "dent on car body . vehicle dent . panel dent . body damage indentation . bumped car panel . car body deformation"
+    confidence_threshold: 0.35
+    color: [255, 68, 68]        # Rojo
+
+  scratch:
+    prompts: "scratch on car paint . paint scratch . key scratch . scrape mark on vehicle . car scrape . surface scratch on car"
+    confidence_threshold: 0.30  # Más bajo: scratches son más sutiles
+    color: [255, 215, 0]       # Amarillo
+
+  crack:
+    prompts: "crack on car bumper . plastic crack . broken bumper piece . cracked car panel . bumper fracture"
+    confidence_threshold: 0.35
+    color: [68, 136, 255]      # Azul
+
+  broken_light:
+    prompts: "broken headlight . broken taillight . smashed car lamp . cracked light housing . damaged car light"
+    confidence_threshold: 0.35
+    color: [170, 68, 255]      # Morado
+
+# --- Parámetros de GroundingDINO ---
+grounding_dino:
+  box_threshold: 0.30
+  text_threshold: 0.25
+
+# --- Parámetros de SAM ---
+sam:
+  model_type: "vit_h"          # vit_h, vit_l, vit_b
+  points_per_side: 32
+  pred_iou_thresh: 0.88
+  stability_score_thresh: 0.95
+
+# --- Procesamiento ---
+processing:
+  batch_size: 1                # Procesar de una en una (gestión de VRAM)
+  max_image_size: 1024         # Redimensionar imágenes grandes
+  save_visualizations: true
+  visualization_alpha: 0.4     # Transparencia de las máscaras
+  device: "auto"               # auto, cuda, cpu
+
+# --- Rutas ---
+paths:
+  input: "data/raw/unlabeled"
+  output: "data/auto_labeled"
+  visualizations: "data/auto_labeled/visualizations"

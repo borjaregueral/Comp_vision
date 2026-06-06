@@ -1,0 +1,35 @@
+# ── Entorno virtual ──────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── Datos (descargados / generados — pesados, no versionar) ───────
+data/
+!data/.gitkeep
+
+# ── Salidas de entrenamiento e inferencia ────────────────────────
+runs/
+results/
+reports/
+evaluation_results/
+data/review_package/
+*.pt
+*.onnx
+*.engine
+
+# ── Python ───────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ── Credenciales / secretos ──────────────────────────────────────
+.env
+kaggle.json
+*.key
+
+# ── Sistema operativo / editores ─────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
