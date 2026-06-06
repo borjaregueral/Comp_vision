@@ -1,0 +1,109 @@
+# ============================================
+# Configuración de Datos — Fotoperitación
+# ============================================
+
+# --- Clases objetivo ---
+classes:
+  0: dent
+  1: scratch
+  2: crack
+  3: broken_light
+
+# --- Mapping de clases desde datasets externos ---
+# Cada key es el nombre de clase tal como aparece en el dataset fuente.
+# El valor es nuestra clase destino, o null para EXCLUIR.
+class_mapping:
+  # CarDD (USTC)
+  "Dent": "dent"
+  "Scratch": "scratch"
+  "Crack": "crack"
+  "Lamp Broken": "broken_light"
+  "Glass Shatter": null          # EXCLUIR
+  "Tire Flat": null              # EXCLUIR
+
+  # VehiDE — etiquetas reales (vietnamita) presentes en *_via_annos.json
+  "tray_son": "scratch"          # trầy sơn = pintura rayada/arañada
+  "mop_lom": "dent"              # móp lõm = abolladura/hundimiento
+  "rach": "crack"                # rách = rotura/desgarro
+  "thung": "dent"                # thủng = perforación/golpe
+  "be_den": "broken_light"       # bể đèn = faro/piloto roto
+  "mat_bo_phan": null            # mất bộ phận = pieza ausente → EXCLUIR (no es daño de superficie)
+  "vo_kinh": null                # vỡ kính = cristal roto → EXCLUIR
+
+  # VehiDE — alias en inglés (por compatibilidad; no aparecen en los datos actuales)
+  "dent": "dent"
+  "scratch": "scratch"
+  "crack": "crack"
+  "broken_lamp": "broken_light"
+  "broken_light": "broken_light"
+  "flat_tire": null              # EXCLUIR
+  "glass_shatter": null          # EXCLUIR
+  "broken_glass": null           # EXCLUIR
+  "tire_flat": null              # EXCLUIR
+
+  # Roboflow / Curacel AI
+  "bonnet-dent": "dent"
+  "door-dent": "dent"
+  "panel-dent": "dent"
+  "body-dent": "dent"
+  "door-scratch": "scratch"
+  "paint-scratch": "scratch"
+  "paint_damage": "scratch"
+  "bumper-crack": "crack"
+  "broken_bumper": "crack"
+  "broken-bumper": "crack"
+  "headlight": "broken_light"
+  "taillight": "broken_light"
+  "broken-headlight": "broken_light"
+  "broken-taillight": "broken_light"
+
+  # Genéricos
+  "damage": "dent"              # Clase genérica → dent por defecto
+  "minor": "scratch"
+  "moderate": "dent"
+  "severe": "crack"
+
+# --- Clases excluidas (patrones) ---
+# Se buscan como substring (case-insensitive) en nombres de clase
+excluded_patterns:
+  - "tire"
+  - "tyre"
+  - "flat"
+  - "glass"
+  - "windshield"
+  - "window"
+  - "luna"
+  - "cristal"
+  - "parabrisas"
+
+# --- Splits ---
+splits:
+  train: 0.7
+  val: 0.2
+  test: 0.1
+
+# --- Filtros de calidad ---
+min_bbox_area: 100              # Área mínima en píxeles (ancho * alto)
+min_polygon_points: 4           # Mínimo puntos por polígono de segmentación
+max_aspect_ratio: 20.0          # Ratio máximo ancho/alto del bbox
+
+# --- Imágenes ---
+image:
+  min_width: 320
+  min_height: 320
+  max_width: 8192
+  max_height: 8192
+  allowed_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".bmp"
+    - ".webp"
+
+# --- Rutas ---
+paths:
+  raw: "data/raw"
+  unified: "data/unified"
+  auto_labeled: "data/auto_labeled"
+  reviewed: "data/reviewed"
+  final: "data/final"
