@@ -52,15 +52,16 @@ Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cam
       ✓ 2026-06-06 · El schema ya existía (commit 61ae209) y cubre todos los campos (nombres en inglés: `model_version`, `zones_summary`); se mantiene como fuente de verdad, sin reescribir. `scripts/output_builder.py`: `build_output()` ensambla el dict canónico (genera `id_evaluacion` `EVA-YYYYMMDD-XXXXXXXX` y `timestamp` UTC RFC3339; lee `schema_version` del propio schema), valida con `jsonschema` Draft 2020-12 (+FormatChecker) y lanza `OutputValidationError` (subclase de `ValueError`) listando cada ruta fallida. `tests/test_output_builder.py`: 10 tests (válido, id/timestamp, campo faltante top-level y anidado, enum `lane`, patrón `lane_rule_id`, `additionalProperties`, skip-validate), todos verdes; cobertura módulo 92%. (commit 8cb2159)
 
 ### T1.3 — Triaje determinista (verde/ámbar/rojo)
-- [ ] Crear `scripts/triage.py` y `business_rules/lane_rules.yaml`.
-- [ ] Implementar `assign_lane(report, metadata) -> (lane, rule_id, reason)`.
-- [ ] Reglas en YAML (no en código), con ID estable (`VERDE-1`, `AMBAR-2`, `ROJO-3`) y `effective_date`.
-- [ ] Reglas iniciales:
+- [x] Crear `scripts/triage.py` y `business_rules/lane_rules.yaml`.
+- [x] Implementar `assign_lane(report, metadata) -> (lane, rule_id, reason)`.
+- [x] Reglas en YAML (no en código), con ID estable (`VERDE-1`, `AMBAR-2`, `ROJO-3`) y `effective_date`.
+- [x] Reglas iniciales:
   - **ROJO**: daño estructural sospechado / `total_eur > 1500` (placeholder hasta T2.1) / vehículo `valor > 40000` / `siniestros_12m >= 4` / alerta de fraude.
   - **VERDE**: `confidence_mean >= 0.85` Y `quality.valid` Y `total_eur < 800` Y sin alertas Y `siniestros_12m <= 2`.
   - **ÁMBAR**: resto.
-- [ ] Output incluye `lane`, `rule_id`, `reason_human_readable`.
+- [x] Output incluye `lane`, `rule_id`, `reason_human_readable`.
 - **Tests**: 6 casos cubriendo cada regla; un caso "edge" justo en el umbral.
+      ✓ 2026-06-06 · `lane_rules.yaml` ya existía (61ae209) y se mantiene como fuente de verdad. **Decisión de diseño**: umbrales/IDs/orden/`reason_template` en YAML; predicados deterministas en `triage.py` enlazados por ID de regla (sin `eval` de las cadenas `condition` del YAML → seguridad + auditabilidad, reglas 10/15). `assign_lane` evalúa ROJO (en orden) → VERDE (todas las condiciones) → AMBAR (resto, con `missing_criteria` en el motivo). `estimacion` ausente se maneja sin romper (→ ámbar). `tests/test_triage.py`: 14 tests (ROJO-1..5, VERDE-1, AMBAR-1, bordes 800/1500/0.85, precedencia rojo>verde, estimacion ausente, contrato lane/rule_id), todos verdes; cobertura módulo 94%. Suite completa 45/45.
 
 ### T1.4 — Logging estructurado de auditoría
 - [ ] Crear `scripts/audit_log.py`.
