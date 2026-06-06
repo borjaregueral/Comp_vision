@@ -87,11 +87,14 @@ Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cam
 Aquí el sistema pasa de "detecta daños" a "estima coste". Es lo que justifica el ROI.
 
 ### T2.1 — Tablas de referencia (baremos, precios, piezas)
-- [ ] Crear `configs/baremo_horas.yaml`: para cada `(parte, tipo_daño, severidad_visual)` → `(horas_chapa, horas_pintura, decision: repair|replace|paint_only)`.
-- [ ] Crear `configs/precios_taller.yaml`: €/h por provincia (datos placeholder con TODO claro, referencia CETRAA/Centro Zaragoza).
-- [ ] Crear `configs/piezas.yaml`: 20 piezas top siniestrables × marcas top (Seat, Renault, Peugeot, VW, Toyota, Ford) con precio OEM y aftermarket. Placeholder con TODO.
-- [ ] Documentar en `configs/REFERENCES.md` qué fuente alimenta cada tabla y proceso de actualización.
+- [x] Crear `configs/baremo_horas.yaml`: para cada `(parte, tipo_daño, severidad_visual)` → `(horas_chapa, horas_pintura, decision: repair|replace|paint_only)`.
+- [x] Crear `configs/precios_taller.yaml`: €/h por provincia (datos placeholder con TODO claro, referencia CETRAA/Centro Zaragoza).
+- [x] Crear `configs/piezas.yaml`: 20 piezas top siniestrables × marcas top (Seat, Renault, Peugeot, VW, Toyota, Ford) con precio OEM y aftermarket. Placeholder con TODO.
+- [x] Documentar en `configs/REFERENCES.md` qué fuente alimenta cada tabla y proceso de actualización.
 - **Tests**: las tres tablas parsean sin errores; cobertura mínima documentada.
+      ✓ 2026-06-06 · Las 3 tablas ya existían (61ae209, `0.1.0-PLACEHOLDER`); se mantienen sin tocar. Nuevo `configs/REFERENCES.md`: fuente de cada tabla (CETRAA/Centro Zaragoza; objetivo productivo Audatex/GT Motive/DAT Iberia), mapeos/huecos (`broken`↔`broken_light`, `glass` fuera de alcance), cobertura mínima garantizada y proceso de actualización/gobernanza (versionado + data_lineage + model card). `tests/test_reference_tables.py`: 14 tests — parseo+versión, **marcador PLACEHOLDER presente** (regla 19), estructura/valores (horas≥0, decisiones, pintura€/h≥chapa, IVA 21%, año_rango coherente, oem>0/aftermarket null|>0), **cobertura mínima** (6 marcas, ≥20 piezas, provincias clave + default, fallback núcleo) y **consistencia con el schema** (`part_category`/`repair_decision` ⊆ enums de `inference_output_v1.json`). Todos verdes. Suite completa 78/78.
+
+> **SPRINT 2 iniciado** (2026-06-06): T2.1 ✅. Tablas validadas y documentadas — base lista para T2.2 (estimación de coste).
 
 ### T2.2 — Módulo de estimación de coste
 - [ ] Crear `scripts/estimate_cost.py`.
