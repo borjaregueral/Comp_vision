@@ -160,11 +160,12 @@ Sin esto, no sabes si el sistema funciona en producción.
       ⏳ PENDIENTE (coordinación, no código): **obtención del extracto real de cartera de Mutua** y su anonimización. La spec ya desbloquea construir/testear T3.2 con datos sintéticos.
 
 ### T3.2 — Carga y validación del golden set
-- [ ] Crear `scripts/load_golden_set.py`.
-- [ ] Validar cada entrada contra el esquema definido en T3.1.
-- [ ] Estratificar por tramos de importe: `<500`, `500-1500`, `>1500` (este último es de control, debe ir a rojo).
-- [ ] Reportar estadísticas: distribución por marca, color, provincia, tipo de daño dominante.
+- [x] Crear `scripts/load_golden_set.py`.
+- [x] Validar cada entrada contra el esquema definido en T3.1.
+- [x] Estratificar por tramos de importe: `<500`, `500-1500`, `>1500` (este último es de control, debe ir a rojo).
+- [x] Reportar estadísticas: distribución por marca, color, provincia, tipo de daño dominante.
 - **Tests**: rechaza entradas con campos faltantes; estratifica correctamente.
+      ✓ 2026-06-07 · `scripts/load_golden_set.py`: `load_golden_set(dir, strict)` lee los `*.json`, **valida cada uno contra `ground_truth_v1.json`** (strict→`GoldenSetValidationError`; no-strict→los recoge en `invalid`), estratifica por tramo (tramos leídos de `business_metrics.yaml`, fuente única) y calcula `compute_stats` (marca/color_grupo/provincia/severidad/decisión/**tipo de daño dominante**/importe). + CLI. Añadido campo opcional `tipos_dano` al schema GT (aditivo). `tests/test_load_golden_set.py`: 9 tests (carga válidos, **rechaza campos faltantes** strict, no-strict recoge inválidos, **PII rechazada**, JSON malformado reportado, estratificación + bordes 500/1500, stats de distribución, dir vacío), todos verdes; cobertura módulo 88%. Suite completa 146/146.
 
 ### T3.3 — Métricas de negocio
 - [x] Crear `scripts/business_metrics.py`.
