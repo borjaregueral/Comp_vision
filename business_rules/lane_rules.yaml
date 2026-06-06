@@ -13,10 +13,13 @@
 # marcar la antigua como deprecated.
 # ============================================================================
 
-version: "1.1.0"
+version: "1.2.0"
 effective_date: "2026-06-06"
 owner: "Equipo la aseguradora — Tramitación de daños propios"
 # Changelog:
+#   1.2.0 (2026-06-06): regla AMBAR-2 (calidad válida sin daño detectado → ámbar,
+#                       posible falso negativo; nunca verde). VERDE-1 exige ahora
+#                       al menos un daño detectado. Sin cambios en umbrales.
 #   1.1.0 (2026-06-06): añadida sección `next_actions` (texto operativo por carril,
 #                       consumido por scripts/assess_claim.py). Sin cambios en
 #                       umbrales ni en las reglas de decisión.
@@ -83,6 +86,7 @@ green:
   id: VERDE-1
   description: "Caso simple, alta confianza, importe bajo, sin alertas"
   all_must_hold:
+    - "len(damages) >= 1"          # debe haber daño detectado (si no → AMBAR-2)
     - "quality.valid"
     - "estimacion.confidence_overall >= thresholds.confidence_green_min"
     - "estimacion.total_eur < thresholds.cost_green_max"
@@ -105,6 +109,16 @@ amber:
     - "Alerta de tipo 'warning' (no crítica)"
     - "Discrepancia menor entre parte declarado y daños detectados"
     - "Pieza no presente en catálogo de precios"
+
+# ── ÁMBAR ESPECIAL: calidad válida sin daño detectado ──────────────────────
+# Si las imágenes pasan el quality gate pero el modelo NO detecta ningún daño,
+# puede ser un falso negativo (daño sutil, ángulo malo) o un siniestro sin daño
+# visible. Nunca verde: se deriva a revisión humana. Se evalúa ANTES que VERDE.
+no_damage_amber:
+  id: AMBAR-2
+  description: "Calidad válida sin daño detectado (posible falso negativo)"
+  condition: "quality.valid and len(damages) == 0"
+  reason_template: "Imágenes válidas pero sin daño detectado: posible falso negativo, requiere revisión humana."
 
 # ── EXCLUSIONES (nunca entran al sistema automático) ───────────────────────
 # Tipos de siniestro que el sistema NO debe evaluar y siempre van a humano.
