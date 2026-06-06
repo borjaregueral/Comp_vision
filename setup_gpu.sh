@@ -49,6 +49,18 @@ else
   python scripts/unify_to_yolo.py     # genera data/final + configs/dataset.yaml
 fi
 
+# --- 2b. Apuntar dataset.yaml a la ruta de ESTA máquina --------------------
+# (el dataset.yaml versionado trae una ruta absoluta de otra máquina; si los
+#  datos se subieron en vez de re-generarse, hay que corregir 'path').
+python - <<'PY'
+import yaml, pathlib
+p = pathlib.Path("configs/dataset.yaml")
+d = yaml.safe_load(p.read_text())
+d["path"] = str(pathlib.Path("data/final").resolve())
+p.write_text(yaml.safe_dump(d, sort_keys=False, allow_unicode=True))
+print("==> dataset.yaml path =", d["path"])
+PY
+
 # --- 3. Entrenamiento en tmux ----------------------------------------------
 echo "==> Lanzando entrenamiento en una sesión tmux llamada 'train'..."
 tmux kill-session -t train 2>/dev/null || true
