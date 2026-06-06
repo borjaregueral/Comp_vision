@@ -435,7 +435,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Genera informes de peritación HTML profesionales",
     )
-    parser.add_argument("--source", type=Path, required=True, help="Imagen o directorio")
+    parser.add_argument("--source", "--image", dest="source", type=Path, required=True,
+                        help="Imagen o directorio (alias: --image)")
     parser.add_argument(
         "--model", type=str,
         default=str(PROJECT_ROOT / "runs" / "damage_seg" / "phase2_finetune" / "weights" / "best.pt"),

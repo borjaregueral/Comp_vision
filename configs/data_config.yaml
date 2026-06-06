@@ -58,7 +58,10 @@ class_mapping:
   "broken-taillight": "broken_light"
 
   # Genéricos
-  "damage": "dent"              # Clase genérica → dent por defecto
+  # "damage" genérico (mono-clase, p.ej. Roboflow SInfo) → EXCLUIR por decisión:
+  # no aporta distinción dent/scratch/crack/broken_light y contaminaría 'dent'.
+  "damage": null               # EXCLUIR (antes mapeaba a dent)
+  "Damage": null               # EXCLUIR (variante con mayúscula de Roboflow)
   "minor": "scratch"
   "moderate": "dent"
   "severe": "crack"
