@@ -114,15 +114,16 @@ Aquí el sistema pasa de "detecta daños" a "estima coste". Es lo que justifica 
       ✓ 2026-06-06 · `severity_matrix.yaml` ya existía (matriz + part_to_category + escalation_rules); se mantiene y se le añaden `cost_severity_thresholds` y `preliminary_visual_thresholds` (bump a v1.1.0). `scripts/severity.py`: `compute_severity(damage, cost_estimate)` = max(severidad_visual=matriz por part/type/extension, severidad_económica=por coste €) + escaladas deterministas: **ESC-3** (faro tech xenón/led/matrix→severo) y **chapa+crack→severo + structural_suspicion** (alimenta triaje ROJO-1); no catalogado→`catalogued=False` + default moderado. `predict.py`: bloque naïve de severidad (magic numbers 2/10) **sustituido** por `severity.preliminary_visual_severity()` (umbrales en YAML, marcado **preliminar/visual**, contrato `summary.severity` intacto, archivo no borrado). ESC-1 (multi-daño) es de nivel siniestro → se aplicará en agregación (T2.5). `tests/test_severity.py`: 10 tests (faro crack→severo, rayón grande plástico→leve/moderado, coste alto eleva, chapa crack→severo+structural, ESC-3 en faro LED, structural nunca leve, part_to_category, no catalogado→moderado, contrato, flag preliminar), todos verdes; cobertura módulo 95%. Suite completa 98/98.
 
 ### T2.4 — Detección de alertas (preexistente, fraude, inconsistencia)
-- [ ] Crear `scripts/alerts.py`.
-- [ ] Implementar detectores iniciales (heurísticos, no ML):
+- [x] Crear `scripts/alerts.py`.
+- [x] Implementar detectores iniciales (heurísticos, no ML):
   - `alert_preexisting_damage`: crop del daño + clasificador simple sobre presencia de óxido/suciedad/decoloración (puede ser placeholder con TODO para v2 con clasificador entrenado).
   - `alert_part_declaration_mismatch`: compara partes detectadas vs `descripcion_asegurado` del metadata (NLP simple, fuzzy match).
   - `alert_multiple_unrelated_damages`: si hay daños en 3+ zonas no contiguas con tipologías muy distintas, marcar.
   - `alert_image_manipulation`: comprobar consistencia de metadata EXIF, presencia de doble compresión JPEG (placeholder con TODO).
-- [ ] Cada alerta tiene `id`, `severity` (info|warning|critical), `description`.
-- [ ] Las alertas `critical` fuerzan carril rojo.
+- [x] Cada alerta tiene `id`, `severity` (info|warning|critical), `description`.
+- [x] Las alertas `critical` fuerzan carril rojo.
 - **Tests**: caso con descripción "paragolpes" y daño detectado en puerta → alerta mismatch.
+      ✓ 2026-06-06 · `scripts/alerts.py`: 4 detectores heurísticos (sin ML), cada alerta `{id, severity, description, evidence}` conforme al schema. `preexisting` = fracción HSV óxido en el crop (TODO v2 clasificador T4.4); `part_declaration_mismatch` = NLP simple normalizando acentos + mapa término→pieza (config) vs detectadas; `multiple_unrelated_damages` = ≥3 zonas/≥2 tipos (aterriza ESC-1 a nivel siniestro); `image_manipulation` = placeholder deshabilitado (id reservado para ROJO-6). **Política v1**: heurísticas emiten `warning` (→ ámbar), nunca `critical`, para no forzar rojos por falsos positivos; `critical` reservado a manipulación/fraude explícito. Config en `configs/alerts.yaml`. `tests/test_alerts.py`: 13 tests (mismatch del plan paragolpes↔puerta, sin/ con coincidencia, acento-insensible, multiple_unrelated, preexistente óxido/limpio/sin-crop, manipulación placeholder, conformidad con el schema de alerts, **critical→rojo ROJO-3** integración, v1 no emite critical), todos verdes; cobertura módulo 87%. Suite completa 111/111.
 
 ### T2.5 — Agregación multi-vista por siniestro
 - [ ] Crear `scripts/claim_aggregator.py`.

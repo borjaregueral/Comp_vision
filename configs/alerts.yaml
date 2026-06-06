@@ -1,0 +1,62 @@
+# ============================================================================
+# alerts.yaml — Configuración de los detectores de alertas (T2.4)
+# ============================================================================
+# Detectores HEURÍSTICOS (no ML) de scripts/alerts.py. Cada alerta lleva
+# id / severity (info|warning|critical) / description / evidence.
+#
+# Política v1: las heurísticas emiten 'warning' (→ revisión humana, ámbar), NO
+# 'critical', para no forzar peritajes presenciales por falsos positivos. El
+# 'critical' (que fuerza rojo vía triaje ROJO-3) se reserva al detector de
+# manipulación de imagen (cuando exista) y a señales explícitas de fraude.
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+
+# ── Daño preexistente (óxido / suciedad / decoloración) ─────────────────────
+# Heurística v1 sobre el crop del daño: fracción de píxeles en rango HSV de
+# óxido/marrón. TODO v2: clasificador entrenado fresco/preexistente (T4.4).
+preexisting_damage:
+  enabled: true
+  severity: warning
+  rust_hsv_lower: [5, 50, 20]      # OpenCV HSV (H 0-179)
+  rust_hsv_upper: [25, 255, 200]
+  min_rust_fraction: 0.15          # >=15% del crop en tono óxido → sospecha
+
+# ── Discrepancia parte declarada vs detectada ───────────────────────────────
+part_declaration_mismatch:
+  enabled: true
+  severity: warning
+  # Término (en la descripción del asegurado) → familias/categorías canónicas.
+  # Las claves se comparan sin acentos y en minúsculas.
+  keyword_to_part:
+    paragolpes: [front_bumper, back_bumper]
+    parachoques: [front_bumper, back_bumper]
+    puerta: [front_left_door, front_right_door, back_left_door, back_right_door]
+    faro: [front_left_light, front_right_light]
+    piloto: [back_left_light, back_right_light]
+    retrovisor: [left_mirror, right_mirror]
+    espejo: [left_mirror, right_mirror]
+    capo: [hood]
+    aleta: [body_panel]
+    guardabarros: [body_panel]
+    llanta: [wheel]
+    rueda: [wheel]
+    porton: [tailgate]
+    maletero: [trunk, tailgate]
+
+# ── Daños múltiples no relacionados (posible fraude) ────────────────────────
+# Aquí aterriza la regla ESC-1 a nivel de siniestro (ver severity_matrix.yaml).
+multiple_unrelated_damages:
+  enabled: true
+  severity: warning
+  min_distinct_zones: 3
+  min_distinct_types: 2
+
+# ── Manipulación de imagen (PLACEHOLDER) ────────────────────────────────────
+# TODO v2: análisis de doble compresión JPEG + ELA (Error Level Analysis) y
+# consistencia de metadata EXIF. Deshabilitado hasta entonces. El id se reserva
+# porque la regla de triaje ROJO-6 lo referencia.
+image_manipulation:
+  enabled: false
+  severity: critical
