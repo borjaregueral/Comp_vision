@@ -14,8 +14,13 @@
 # extension: small | medium | large (por área relativa a la pieza, no a la imagen)
 # ============================================================================
 
-version: "1.0.0"
+version: "1.1.0"
 effective_date: "2026-06-06"
+# Changelog:
+#   1.1.0 (2026-06-06): añadidos cost_severity_thresholds (componente económica
+#                       de compute_severity) y preliminary_visual_thresholds (flag
+#                       preliminar de predict.py standalone). Matriz sin cambios.
+#   1.0.0 (2026-06-06): versión inicial.
 
 # ── Mapeo pieza → categoría ────────────────────────────────────────────────
 # Las 23 clases de carparts-seg se agrupan en estas categorías económicas.
@@ -159,3 +164,18 @@ extension_thresholds:
   small_max: 0.10        # <10% de la pieza
   medium_max: 0.30       # 10-30%
   # large: >30%
+
+# ── Severidad económica por coste (componente € de compute_severity) ────────
+# La severidad final = max(severidad_visual=matriz, severidad_económica=coste).
+# Importes con IVA, alineados con el rango objetivo de parking (150-1500€).
+cost_severity_thresholds:
+  leve_max_eur: 400        # <=400€  → leve
+  moderado_max_eur: 900    # 400-900€ → moderado;  >900€ → severo
+
+# ── Flag preliminar de predict.py standalone (SOLO visual, % de IMAGEN) ──────
+# Sustituye los magic numbers que predict.py tenía inline. Es un indicador
+# rápido para inferencia suelta; la severidad autoritativa la da compute_severity
+# (por pieza + zona + coste) en el pipeline. NO usar para decisiones de negocio.
+preliminary_visual_thresholds:
+  leve_max_pct: 2.0        # <2% del área de la imagen → Leve
+  moderado_max_pct: 10.0   # 2-10% → Moderado;  >10% → Severo
