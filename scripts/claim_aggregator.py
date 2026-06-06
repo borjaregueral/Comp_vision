@@ -47,7 +47,7 @@ def _weighted_vote(pairs):
         tally[value] = tally.get(value, 0.0) + weight
     if not tally:
         return None
-    return max(tally, key=tally.get)
+    return max(tally, key=lambda k: tally[k])
 
 
 def _region_key(det: dict):

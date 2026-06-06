@@ -150,8 +150,8 @@ def run_auto_labeling(
     labels_dir.mkdir(parents=True, exist_ok=True)
     images_out_dir.mkdir(parents=True, exist_ok=True)
 
+    viz_dir = output_dir / "visualizations"
     if visualize:
-        viz_dir = output_dir / "visualizations"
         viz_dir.mkdir(parents=True, exist_ok=True)
 
     # Obtener thresholds por clase

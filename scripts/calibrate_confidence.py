@@ -25,7 +25,7 @@ Public API
 import logging
 import pickle
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -54,7 +54,7 @@ class ConfidenceCalibrator:
         if method not in ("isotonic", "platt"):
             raise ValueError(f"Unknown calibration method: {method}")
         self.method = method
-        self.model = None
+        self.model: Any = None
 
     def fit(self, confidences, labels) -> "ConfidenceCalibrator":
         conf = np.asarray(confidences, dtype=float)

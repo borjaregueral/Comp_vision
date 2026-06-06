@@ -142,21 +142,22 @@ def assess_claim(
         _precios = estimate_cost.load_precios()
         _piezas = estimate_cost.load_piezas()
         _est_cfg = estimate_cost.load_estimation_config()
-
-        def _estimate(dmgs):
-            return estimate_cost.estimate_repair_cost(
-                dmgs, metadata, province,
-                baremo=_baremo, precios=_precios, piezas=_piezas, config=_est_cfg,
-            )
         pricing_versions = {
             "baremo_horas": _baremo.get("version", "unknown"),
             "precios_taller": _precios.get("version", "unknown"),
             "piezas": _piezas.get("version", "unknown"),
         }
     else:
-        def _estimate(dmgs):
-            return estimator(dmgs, metadata, province)
+        _baremo = _precios = _piezas = _est_cfg = None
         pricing_versions = {"baremo_horas": "injected", "precios_taller": "injected", "piezas": "injected"}
+
+    def _estimate(dmgs):
+        if estimator is not None:
+            return estimator(dmgs, metadata, province)
+        return estimate_cost.estimate_repair_cost(
+            dmgs, metadata, province,
+            baremo=_baremo, precios=_precios, piezas=_piezas, config=_est_cfg,
+        )
 
     t0 = time.perf_counter()
 
