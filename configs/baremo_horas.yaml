@@ -1,0 +1,113 @@
+# ============================================================================
+# baremo_horas.yaml — Horas de mano de obra estimadas por reparación
+# ============================================================================
+# IMPORTANTE: los valores aquí son PLACEHOLDERS basados en rangos públicos
+# orientativos del sector (CETRAA, Centro Zaragoza, baremos de aseguradoras).
+# Antes de uso productivo SUSTITUIR por el baremo oficial pactado con Mutua /
+# red de talleres propia.
+#
+# Estructura:
+#   baremo[part_category][damage_type][extension] = {
+#       chapa_h: horas de chapa,
+#       pintura_h: horas de pintura,
+#       decision: repair | repaint_only | replace
+#   }
+#
+# extension: small | medium | large (relativa a la pieza, ver severity_matrix.yaml)
+#
+# El coste se calcula como:
+#   coste = (chapa_h + pintura_h) * tarifa_provincia
+#         + (precio_pieza si decision == replace, desde piezas.yaml)
+#         + materiales_pintura (15% de la mano de pintura por convención)
+# ============================================================================
+
+version: "0.1.0-PLACEHOLDER"
+effective_date: "2026-06-06"
+status: "DRAFT — sustituir por baremo oficial antes de uso productivo"
+
+# ── Baremo por categoría de pieza ──────────────────────────────────────────
+
+baremo:
+
+  plastic_panel:
+    scratch:
+      small:  { chapa_h: 0.0, pintura_h: 0.8, decision: repaint_only }
+      medium: { chapa_h: 0.0, pintura_h: 1.5, decision: repaint_only }
+      large:  { chapa_h: 0.0, pintura_h: 2.5, decision: repaint_only }
+    dent:
+      small:  { chapa_h: 0.5, pintura_h: 1.2, decision: repair }
+      medium: { chapa_h: 1.5, pintura_h: 2.0, decision: repair }
+      large:  { chapa_h: 0.5, pintura_h: 2.5, decision: replace }   # más rápido sustituir
+    crack:
+      small:  { chapa_h: 1.0, pintura_h: 2.0, decision: repair }    # parche
+      medium: { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
+      large:  { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
+    broken:
+      any:    { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
+
+  body_panel:
+    scratch:
+      small:  { chapa_h: 0.0, pintura_h: 1.0, decision: repaint_only }
+      medium: { chapa_h: 0.3, pintura_h: 2.0, decision: repaint_only }
+      large:  { chapa_h: 0.5, pintura_h: 3.0, decision: repaint_only }
+    dent:
+      small:  { chapa_h: 1.0, pintura_h: 1.5, decision: repair }    # PDR si pintura intacta
+      medium: { chapa_h: 2.5, pintura_h: 2.5, decision: repair }
+      large:  { chapa_h: 4.0, pintura_h: 3.5, decision: repair }    # o replace según ubicación
+    crack:
+      any:    { chapa_h: 3.0, pintura_h: 3.0, decision: repair }    # soldadura/refuerzo
+    broken:
+      any:    { chapa_h: 2.0, pintura_h: 3.0, decision: replace }
+
+  light_assembly:
+    scratch:
+      small:  { chapa_h: 0.0, pintura_h: 0.0, decision: repair }    # pulido óptico
+      medium: { chapa_h: 0.5, pintura_h: 0.0, decision: repair }
+      large:  { chapa_h: 0.5, pintura_h: 0.0, decision: replace }
+    dent:
+      any:    { chapa_h: 0.8, pintura_h: 0.0, decision: replace }
+    crack:
+      any:    { chapa_h: 0.8, pintura_h: 0.0, decision: replace }
+    broken:
+      any:    { chapa_h: 0.8, pintura_h: 0.0, decision: replace }
+
+  mirror:
+    scratch:
+      any:    { chapa_h: 0.0, pintura_h: 0.5, decision: repaint_only }
+    dent:
+      any:    { chapa_h: 0.3, pintura_h: 0.8, decision: repair }
+    crack:
+      any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }   # carcasa o cristal
+    broken:
+      any:    { chapa_h: 0.5, pintura_h: 0.5, decision: replace }
+
+  wheel:
+    scratch:
+      any:    { chapa_h: 1.0, pintura_h: 1.0, decision: repair }    # pulido + lacado
+    dent:
+      any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }
+    crack:
+      any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }
+    broken:
+      any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }
+
+  unknown:
+    # Si no se identifica pieza, ir conservador para evitar infravalorar
+    any:
+      any:    { chapa_h: 2.0, pintura_h: 2.0, decision: repair }
+
+# ── Materiales de pintura ──────────────────────────────────────────────────
+# Convención sector: % sobre la mano de obra de pintura.
+paint_materials:
+  pct_of_pintura_h_cost: 15.0    # 15% del coste de mano de pintura
+
+# ── Operaciones complementarias ────────────────────────────────────────────
+# Tiempos típicos que se añaden según contexto. NO se aplican automáticamente
+# todos; el estimador decide cuáles incluir según el caso.
+additional_operations:
+  desmontaje_paragolpes_completo: 0.8     # h, si se sustituye o gran daño
+  desmontaje_puerta_completo: 1.2
+  desmontaje_faro: 0.5
+  alineacion_paneles: 0.5                 # tras sustitución de chapa
+  preparacion_color_metalizado: 0.5       # extra si color metalizado/perlado/tricapa
+  diagnostico_sensores_paragolpes: 0.5    # parking sensors, cámaras

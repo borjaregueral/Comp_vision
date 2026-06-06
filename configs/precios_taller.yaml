@@ -1,0 +1,114 @@
+# ============================================================================
+# precios_taller.yaml — Tarifas €/h de mano de obra por provincia
+# ============================================================================
+# IMPORTANTE: VALORES PLACEHOLDER orientativos. Sustituir por las tarifas
+# pactadas con la red de talleres de Mutua o, en su defecto, por la media
+# del observatorio CETRAA / Centro Zaragoza vigente.
+#
+# Diferenciación chapa vs pintura: estándar del sector. Pintura suele costar
+# 10-20% más por hora que chapa debido a materiales, cabinas y especialización.
+#
+# Tarifas por provincia: el coste de mano de obra varía hasta un 40% entre
+# provincias. Madrid, Barcelona, Bilbao son las más caras.
+# ============================================================================
+
+version: "0.1.0-PLACEHOLDER"
+effective_date: "2026-06-06"
+status: "DRAFT — sustituir por tarifas pactadas con red de talleres"
+currency: EUR
+iva_included: false              # Importante: tarifas SIN IVA; el estimador suma 21% al final
+
+# ── Tarifas por defecto (media nacional, fallback si provincia no listada) ─
+default:
+  chapa_eur_h: 48.0
+  pintura_eur_h: 55.0
+  mecanica_eur_h: 50.0           # No usado en daños de aparcamiento; por completitud
+
+# ── Tarifas por provincia ──────────────────────────────────────────────────
+# Codificadas por nombre. El estimador hace match case-insensitive contra
+# metadata.provincia. Si no encuentra, usa `default`.
+by_province:
+
+  # ── Tier 1: grandes capitales (más caras) ────────────────────────────────
+  Madrid:
+    chapa_eur_h: 55.0
+    pintura_eur_h: 62.0
+    mecanica_eur_h: 58.0
+  Barcelona:
+    chapa_eur_h: 54.0
+    pintura_eur_h: 60.0
+    mecanica_eur_h: 57.0
+  Bizkaia:
+    chapa_eur_h: 52.0
+    pintura_eur_h: 58.0
+    mecanica_eur_h: 55.0
+  Gipuzkoa:
+    chapa_eur_h: 52.0
+    pintura_eur_h: 58.0
+    mecanica_eur_h: 55.0
+
+  # ── Tier 2: capitales medianas ───────────────────────────────────────────
+  Valencia:
+    chapa_eur_h: 48.0
+    pintura_eur_h: 54.0
+    mecanica_eur_h: 50.0
+  Sevilla:
+    chapa_eur_h: 46.0
+    pintura_eur_h: 52.0
+    mecanica_eur_h: 48.0
+  Zaragoza:
+    chapa_eur_h: 46.0
+    pintura_eur_h: 52.0
+    mecanica_eur_h: 48.0
+  Málaga:
+    chapa_eur_h: 46.0
+    pintura_eur_h: 52.0
+    mecanica_eur_h: 48.0
+  Alicante:
+    chapa_eur_h: 45.0
+    pintura_eur_h: 51.0
+    mecanica_eur_h: 47.0
+  Murcia:
+    chapa_eur_h: 44.0
+    pintura_eur_h: 50.0
+    mecanica_eur_h: 46.0
+
+  # ── Tier 3: provincias rurales o de menor tarifa ─────────────────────────
+  Albacete:
+    chapa_eur_h: 40.0
+    pintura_eur_h: 46.0
+    mecanica_eur_h: 42.0
+  Cáceres:
+    chapa_eur_h: 38.0
+    pintura_eur_h: 44.0
+    mecanica_eur_h: 40.0
+  Badajoz:
+    chapa_eur_h: 38.0
+    pintura_eur_h: 44.0
+    mecanica_eur_h: 40.0
+  Cuenca:
+    chapa_eur_h: 38.0
+    pintura_eur_h: 44.0
+    mecanica_eur_h: 40.0
+
+# ── Recargos y modificadores ───────────────────────────────────────────────
+# Aplicados sobre el subtotal antes de IVA.
+modifiers:
+  # Talleres concertados de la aseguradora: descuento típico negociado
+  taller_concertado_discount_pct: 12.0
+
+  # Vehículos de gama alta: a veces requieren talleres especializados (Audi
+  # Centrum, BMW M, etc.) con tarifas superiores. Detección por valor.
+  premium_vehicle_surcharge_pct: 15.0
+  premium_vehicle_threshold_eur: 35000
+
+  # Urgencia: vehículo necesario para trabajo del asegurado. No aplicado
+  # automáticamente, solo si el flujo lo solicita.
+  urgent_repair_surcharge_pct: 10.0
+
+# ── IVA ────────────────────────────────────────────────────────────────────
+# Se aplica al final sobre el subtotal completo. Para particulares se incluye;
+# para flotas con derecho a deducción, se reporta aparte.
+vat:
+  rate_pct: 21.0
+  show_separately: true

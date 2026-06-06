@@ -1,0 +1,105 @@
+# ============================================================================
+# lane_rules.yaml — Reglas deterministas de triaje verde/ámbar/rojo
+# ============================================================================
+# Estas reglas las aplica scripts/triage.py SOBRE el output ya validado del
+# pipeline (quality + damages + estimacion + alerts). El modelo NO decide
+# el carril; el modelo aporta inputs y estas reglas deciden.
+#
+# Orden de evaluación: ROJO se evalúa primero (más restrictivo). Si no aplica
+# ninguna regla roja, se evalúa VERDE. Si tampoco, ÁMBAR por defecto.
+#
+# Cada regla tiene un ID estable que se escribe en el audit log. NO renombrar
+# IDs históricos; si una regla cambia significado, crear nueva con ID nuevo y
+# marcar la antigua como deprecated.
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+owner: "Equipo Mutua — Tramitación de daños propios"
+
+# ── Umbrales económicos (en €) ─────────────────────────────────────────────
+# Anclas que aparecen en las reglas. Centralizados para revisión rápida.
+thresholds:
+  cost_green_max: 800            # Por encima: nunca carril verde
+  cost_red_min: 1500             # Por encima: carril rojo automático
+  high_value_vehicle: 40000      # Valor vehículo que fuerza revisión
+  confidence_green_min: 0.85     # Confianza media mínima para carril verde
+  history_red_min: 4             # Nº siniestros últimos 12m que fuerza rojo
+  history_green_max: 2           # Por encima de esto, fuera de verde
+
+# ── REGLAS DE CARRIL ROJO (peritaje presencial obligatorio) ────────────────
+# Evaluadas en orden. Basta que UNA aplique para asignar rojo.
+red:
+  - id: ROJO-1
+    description: "Sospecha de daño estructural"
+    condition: "any(d.structural_suspicion for d in damages)"
+    reason_template: "Detectado posible daño estructural en {parts}: requiere peritaje presencial."
+
+  - id: ROJO-2
+    description: "Importe estimado supera umbral de gestión automática"
+    condition: "estimacion.total_eur > thresholds.cost_red_min"
+    reason_template: "Importe estimado {total_eur}€ supera el umbral de {limit}€ para gestión sin perito."
+
+  - id: ROJO-3
+    description: "Alerta crítica de fraude o inconsistencia"
+    condition: "any(a.severity == 'critical' for a in alerts)"
+    reason_template: "Alerta crítica activada: {alert_descriptions}"
+
+  - id: ROJO-4
+    description: "Vehículo de alto valor"
+    condition: "metadata.valor_vehiculo_estimado > thresholds.high_value_vehicle"
+    reason_template: "Valor de vehículo declarado ({valor}€) requiere peritaje cualificado."
+
+  - id: ROJO-5
+    description: "Histórico de siniestros sospechoso"
+    condition: "metadata.siniestros_12m >= thresholds.history_red_min"
+    reason_template: "Asegurado con {n} siniestros en últimos 12m: revisión obligatoria."
+
+  - id: ROJO-6
+    description: "Calidad de imagen inválida (no se pudo evaluar)"
+    condition: "not quality.valid"
+    reason_template: "Imágenes insuficientes para evaluación automática: {problems}"
+    # Nota: estrictamente este caso debería ser ámbar (revisión humana en pantalla)
+    # pero forzamos rojo si además hay indicios de fraude por imagen manipulada.
+    additional_condition: "any(a.id == 'image_manipulation' for a in alerts)"
+
+# ── REGLAS DE CARRIL VERDE (resolución automática) ─────────────────────────
+# TODAS deben cumplirse para asignar verde. Si una sola falla → ámbar (o rojo
+# si aplica regla roja).
+green:
+  id: VERDE-1
+  description: "Caso simple, alta confianza, importe bajo, sin alertas"
+  all_must_hold:
+    - "quality.valid"
+    - "estimacion.confidence_overall >= thresholds.confidence_green_min"
+    - "estimacion.total_eur < thresholds.cost_green_max"
+    - "len([a for a in alerts if a.severity in ['warning', 'critical']]) == 0"
+    - "metadata.siniestros_12m <= thresholds.history_green_max"
+    - "all(d.confidence >= thresholds.confidence_green_min for d in damages)"
+    - "not any(d.structural_suspicion for d in damages)"
+  reason_template: "Caso simple sin alertas: importe {total_eur}€, confianza {confidence:.0%}, asignado a liquidación automática."
+
+# ── CARRIL ÁMBAR (revisión humana en pantalla) ─────────────────────────────
+# Por defecto, si no es rojo ni verde. No requiere condiciones explícitas
+# pero documentamos los motivos típicos para que el log sea legible.
+amber:
+  id: AMBAR-1
+  description: "Requiere revisión humana en pantalla (caso ambiguo)"
+  reason_template: "No cumple criterios de gestión automática: {missing_criteria}. Asignado a revisión rápida."
+  typical_triggers:
+    - "Confianza del modelo entre 0.50 y 0.85"
+    - "Importe entre 800€ y 1500€"
+    - "Alerta de tipo 'warning' (no crítica)"
+    - "Discrepancia menor entre parte declarado y daños detectados"
+    - "Pieza no presente en catálogo de precios"
+
+# ── EXCLUSIONES (nunca entran al sistema automático) ───────────────────────
+# Tipos de siniestro que el sistema NO debe evaluar y siempre van a humano.
+out_of_scope:
+  - "Siniestros con lesiones personales (cualquier importe)"
+  - "Siniestros con terceros heridos o vehículos de terceros implicados"
+  - "Robos y actos vandálicos (requieren parte policial)"
+  - "Daños por causas naturales (granizo, inundación) — flujo aparte"
+  - "Pérdida total declarada por el asegurado"
+  # Nota: estos se filtran ANTES de llegar al pipeline, en el sistema de
+  # tramitación. El modelo no debería verlos. Si ve uno, generar alerta crítica.

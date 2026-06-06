@@ -1,0 +1,72 @@
+# ============================================================================
+# quality_gate.yaml — Umbrales del filtro de calidad de imagen
+# ============================================================================
+# Aplicado en scripts/quality_gate.py ANTES de la inferencia de daños.
+# Si una imagen falla cualquier criterio "blocking", se deriva a carril ámbar
+# automáticamente sin ejecutar el detector. Esto evita generar predicciones
+# erróneas con confianza alta sobre imágenes inservibles.
+#
+# Versionado: cualquier cambio aquí debe actualizar `version` y `effective_date`.
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+
+# ── Nitidez (varianza del Laplaciano) ──────────────────────────────────────
+# Métrica clásica de blur detection. Imagen nítida = varianza alta.
+# Umbrales calibrados sobre fotos típicas de móvil; revisar tras 100 fotos reales.
+sharpness:
+  enabled: true
+  blocking: true
+  laplacian_variance_min: 80.0   # Por debajo: borrosa, no usable
+  laplacian_variance_warn: 150.0 # Entre min y warn: aceptable pero anotar alerta
+
+# ── Exposición ──────────────────────────────────────────────────────────────
+# Detecta fotos contra el sol, en sombra densa, sobreexpuestas.
+exposure:
+  enabled: true
+  blocking: true
+  # % de píxeles saturados (cerca del blanco o negro puro). Más alto = peor.
+  saturated_high_pct_max: 15.0   # Sobreexpuesta si >15% píxeles >250
+  saturated_low_pct_max: 25.0    # Subexpuesta si >25% píxeles <15
+  # Brillo medio aceptable (0-255). Fuera de rango: revisar.
+  mean_brightness_min: 40
+  mean_brightness_max: 220
+
+# ── Resolución mínima ───────────────────────────────────────────────────────
+# Por debajo no hay píxeles suficientes para detectar daños finos.
+resolution:
+  enabled: true
+  blocking: true
+  min_width: 800
+  min_height: 600
+  # Aviso (no bloqueante): fotos muy grandes pueden tener artefactos de compresión.
+  max_megapixels_warn: 50
+
+# ── Detección de vehículo en la imagen ─────────────────────────────────────
+# Usa yolo11n.pt sobre clases COCO. Si no hay coche/camión/etc., probablemente
+# es una foto de algo que no es un vehículo (recibo, persona, paisaje).
+vehicle_present:
+  enabled: true
+  blocking: true
+  model: "yolo11n.pt"
+  target_classes: [2, 5, 7]      # COCO: car (2), bus (5), truck (7)
+  min_confidence: 0.50
+  # El vehículo debe ocupar al menos este % de la imagen, si no parece
+  # una foto general donde el coche es accesorio.
+  min_area_fraction: 0.10
+
+# ── EXIF y metadata ─────────────────────────────────────────────────────────
+# Por RGPD eliminamos cualquier metadata identificable (GPS, fabricante,
+# modelo de cámara) antes de procesar. No bloqueante, solo informativo.
+exif:
+  strip_on_ingest: true
+  log_stripped_fields: true
+
+# ── Detección de manipulación digital (placeholder) ────────────────────────
+# v1: detección heurística simple (consistencia de compresión JPEG).
+# v2: clasificador entrenado. Mientras tanto, no bloquea, solo añade alerta.
+tampering_detection:
+  enabled: false               # Activar cuando T2.4 / v2 esté listo
+  blocking: false
+  # TODO: implementar análisis de doble compresión JPEG y ELA (Error Level Analysis)

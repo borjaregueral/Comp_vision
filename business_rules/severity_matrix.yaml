@@ -1,0 +1,161 @@
+# ============================================================================
+# severity_matrix.yaml — Matriz de severidad económica
+# ============================================================================
+# Reemplaza la lógica naïve "severidad por % área" de predict.py. La severidad
+# final que se reporta = max(severidad_visual, severidad_económica).
+#
+# Categorías de severidad:
+#   leve      → Cosmético, reparable sin sustitución, mano de obra <2h
+#   moderado  → Requiere chapa+pintura o sustitución de pieza menor
+#   severo    → Sustitución de pieza cara, daño estructural sospechado,
+#               o requiere desmontaje significativo
+#
+# La matriz se consulta como: severity[part_category][damage_type][extension]
+# extension: small | medium | large (por área relativa a la pieza, no a la imagen)
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+
+# ── Mapeo pieza → categoría ────────────────────────────────────────────────
+# Las 23 clases de carparts-seg se agrupan en estas categorías económicas.
+# Mismas implicaciones de coste = misma categoría.
+part_to_category:
+  # Plástico exterior (paragolpes, molduras)
+  front_bumper: plastic_panel
+  back_bumper: plastic_panel
+  # Chapa exterior (aletas, puertas, capó, portón)
+  hood: body_panel
+  trunk: body_panel
+  tailgate: body_panel
+  front_left_door: body_panel
+  front_right_door: body_panel
+  back_left_door: body_panel
+  back_right_door: body_panel
+  front_door: body_panel
+  back_door: body_panel
+  # Cristales (excluidos del scope, pero por completitud)
+  front_glass: glass
+  back_glass: glass
+  # Faros y pilotos (alto coste, especial atención a xenón/LED/matrix)
+  front_light: light_assembly
+  back_light: light_assembly
+  front_left_light: light_assembly
+  front_right_light: light_assembly
+  back_left_light: light_assembly
+  back_right_light: light_assembly
+  # Retrovisores
+  left_mirror: mirror
+  right_mirror: mirror
+  # Otros
+  wheel: wheel
+  object: unknown
+
+# ── Matriz de severidad ────────────────────────────────────────────────────
+# Para cada (categoria_pieza, tipo_daño, extensión) → severidad económica.
+# Cuando una combinación no esté listada, severidad por defecto = moderado y
+# se añade alerta de "combinación no catalogada, revisar".
+
+severity:
+
+  plastic_panel:
+    scratch:
+      small: leve         # Pulir, < 50€
+      medium: leve        # Repintar zona, 80-200€
+      large: moderado     # Repintar pieza completa, 200-400€
+    dent:
+      small: leve         # Reparable por PDR si plástico flexible
+      medium: moderado    # Chapa + pintura
+      large: moderado     # Posible sustitución
+    crack:
+      small: moderado     # Plástico agrietado raramente se repara
+      medium: severo      # Sustitución casi segura
+      large: severo       # Sustitución obligatoria
+    broken:               # Pieza rota/desprendida
+      any: severo
+
+  body_panel:
+    scratch:
+      small: leve
+      medium: moderado    # Chapa requiere mejor preparación que plástico
+      large: moderado
+    dent:
+      small: leve         # PDR posible si no afecta a pintura
+      medium: moderado    # Chapa + pintura
+      large: severo       # Posible sustitución de panel + alineación
+    crack:                # Fisura en chapa = daño estructural sospechado
+      any: severo
+    broken:
+      any: severo
+
+  light_assembly:
+    # Atención: faros xenón/LED/matrix pueden costar >1000€ aún con daño pequeño.
+    # Se requiere lookup en piezas.yaml para precio exacto.
+    scratch:
+      small: leve         # Pulido óptico
+      medium: moderado
+      large: severo
+    dent:                 # Faro con golpe = probable rotura interna
+      any: severo
+    crack:
+      any: severo
+    broken:
+      any: severo
+
+  mirror:
+    scratch:
+      any: leve
+    dent:
+      any: moderado
+    crack:                # Espejo agrietado = sustitución
+      any: moderado
+    broken:
+      any: moderado       # Retrovisor completo 80-400€ según marca
+
+  glass:
+    # En scope solo para registrar; no se evalúan glass shatters en este sistema.
+    any:
+      any: severo         # Si llega uno, derivar a flujo de lunas
+
+  wheel:
+    # Llantas: cosmético si solo bordillazo; severo si afecta neumático.
+    scratch:
+      any: leve
+    dent:
+      any: moderado
+    crack:
+      any: severo         # Llanta agrietada = sustitución por seguridad
+    broken:
+      any: severo
+
+  unknown:
+    # Si no se pudo asignar parte, generar alerta y tratar como moderado
+    any:
+      any: moderado
+
+# ── Reglas de escalada automática ──────────────────────────────────────────
+# Condiciones que elevan la severidad por encima del lookup en la matriz.
+escalation_rules:
+  - id: ESC-1
+    description: "Múltiples daños severos en zonas distintas → severo"
+    condition: "count(d.severity == 'severo') >= 2"
+    new_severity: severo
+
+  - id: ESC-2
+    description: "Daño moderado/severo en zona de larguero o pase de rueda"
+    condition: "damage.zone in ['front_structural', 'rear_structural'] and damage.severity != 'leve'"
+    new_severity: severo
+    set_structural_suspicion: true
+
+  - id: ESC-3
+    description: "Faro identificado como xenón/LED/matrix en piezas.yaml"
+    condition: "damage.part_category == 'light_assembly' and lookup_piezas(damage).tech in ['xenon', 'led', 'matrix']"
+    new_severity: severo
+
+# ── Mapeo extensión visual → categoría ─────────────────────────────────────
+# Calculado como (área del daño) / (área de la pieza detectada).
+# NO confundir con el % sobre la imagen completa que usa el predict.py viejo.
+extension_thresholds:
+  small_max: 0.10        # <10% de la pieza
+  medium_max: 0.30       # 10-30%
+  # large: >30%
