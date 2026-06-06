@@ -35,12 +35,13 @@ Antes de tocar nada, verifica el estado del entrenamiento y prepara la infraestr
 Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cambia todo a su alrededor.
 
 ### T1.1 — Quality Gate (filtro de calidad de imagen)
-- [ ] Crear `scripts/quality_gate.py`.
-- [ ] Funciones: `assess_sharpness` (varianza Laplaciano), `assess_exposure` (% píxeles saturados sub/sobre), `assess_resolution` (min 800x600), `detect_vehicle_present` (usar `yolo11n.pt` COCO, clase car/truck), `extract_and_strip_exif`.
-- [ ] Salida: dict `{valid: bool, problems: list[str], scores: dict, exif_removed: bool}`.
-- [ ] Configuración en `configs/quality_gate.yaml`: umbrales por criterio.
+- [x] Crear `scripts/quality_gate.py`.
+- [x] Funciones: `assess_sharpness` (varianza Laplaciano), `assess_exposure` (% píxeles saturados sub/sobre), `assess_resolution` (min 800x600), `detect_vehicle_present` (usar `yolo11n.pt` COCO, clase car/truck), `extract_and_strip_exif`.
+- [x] Salida: dict `{valid: bool, problems: list[str], scores: dict, exif_removed: bool}`.
+- [x] Configuración en `configs/quality_gate.yaml`: umbrales por criterio.
 - **Tests**: imagen borrosa → invalid; imagen oscura → invalid; imagen OK → valid; imagen sin coche → invalid.
 - **Criterio**: `pytest tests/test_quality_gate.py` pasa al 100%.
+      ✓ 2026-06-06 · `scripts/quality_gate.py` consume `configs/quality_gate.yaml` (umbrales externos, sin magic numbers). `detect_vehicle_present` con YOLO `yolo11n.pt` *lazy* e inyectable; EXIF *stripping* RGPD vía round-trip numpy. `tests/test_quality_gate.py`: 13 tests (borrosa/oscura/OK/sin-coche/baja-resolución/EXIF/archivo-inexistente + parsing con modelo fake offline), todos verdes; cobertura módulo 77% (resto = CLI + camino YOLO real, no testeados offline a propósito). Fixture `synthetic_image` ajustado a checkerboard de alta frecuencia (nitidez=2941≫80). (commit pendiente)
 
 ### T1.2 — Schema JSON de salida v1
 - [ ] Crear `schemas/inference_output_v1.json` (JSON Schema) con campos: `id_evaluacion`, `timestamp`, `version_modelo`, `quality`, `damages[]`, `zones`, `alerts[]`, `estimacion`, `lane`, `lane_reason`, `next_action`, `audit`.
