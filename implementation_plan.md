@@ -97,12 +97,13 @@ Aquí el sistema pasa de "detecta daños" a "estima coste". Es lo que justifica 
 > **SPRINT 2 iniciado** (2026-06-06): T2.1 ✅. Tablas validadas y documentadas — base lista para T2.2 (estimación de coste).
 
 ### T2.2 — Módulo de estimación de coste
-- [ ] Crear `scripts/estimate_cost.py`.
-- [ ] Función `estimate_repair_cost(damages, vehicle_metadata, province) -> {total_eur, p25, p75, breakdown, confidence}`.
-- [ ] Maneja sustitución vs reparación según baremo.
-- [ ] Devuelve **rango P25-P75**, no solo punto medio. Ante incertidumbre, usar P75 para liquidar (regla conservadora).
-- [ ] Si una pieza no está en `piezas.yaml`, devolver `confidence: low` y derivar a ámbar.
+- [x] Crear `scripts/estimate_cost.py`.
+- [x] Función `estimate_repair_cost(damages, vehicle_metadata, province) -> {total_eur, p25, p75, breakdown, confidence}`.
+- [x] Maneja sustitución vs reparación según baremo.
+- [x] Devuelve **rango P25-P75**, no solo punto medio. Ante incertidumbre, usar P75 para liquidar (regla conservadora).
+- [x] Si una pieza no está en `piezas.yaml`, devolver `confidence: low` y derivar a ámbar.
 - **Tests**: caso "rayón paragolpes Seat Ibiza" → coste en rango razonable; caso pieza desconocida → confidence low.
+      ✓ 2026-06-06 · `scripts/estimate_cost.py`: `estimate_repair_cost(damages, vehicle_metadata, province)` → `{total_eur, p25_eur, p75_eur, breakdown{mano_obra,piezas,materiales,iva}, confidence(0-1), confidence_label, currency, iva_included, province_used, parts_lookup_missing}` (forma lista para `estimacion` del schema). Fórmula del baremo (horas·tarifa_provincia + materiales 15% pintura + pieza si replace + IVA 21%). OEM/aftermarket por política (edad≤3, valor>30k, faro tech). Rango P25–P75 **heurístico** (banda ±20% mano de obra + spread OEM↔aftermarket), honesto: NO es percentil calibrado → recalibrar en Sprint 3 vs importe pagado. Pieza no catalogada → `fallback_prices` + `parts_lookup_missing` + confidence **low** (0.40) → ámbar. Config en `configs/estimation.yaml` (banda, umbrales OEM, niveles confianza, año ref — sin magic numbers). **Caveat**: modificadores de `precios_taller` (taller concertado / premium / urgencia) NO se auto-aplican en v1; el buffer conservador es P75. `tests/test_estimate_cost.py`: 10 tests (Seat Ibiza scratch razonable, replace aftermarket/OEM por edad y valor, pieza desconocida→low, fallback baremo→medium, orden P25≤total≤P75, provincia default, vacío→0, contrato), todos verdes; cobertura módulo 95%. Suite completa 88/88.
 
 ### T2.3 — Matriz de severidad económica
 - [ ] Eliminar la lógica naïve de severidad por % área de `predict.py` (sustituir, no borrar el archivo).

@@ -1,0 +1,40 @@
+# ============================================================================
+# estimation.yaml — Constantes del módulo de estimación de coste (T2.2)
+# ============================================================================
+# Constantes operativas de scripts/estimate_cost.py. Fuera del código (regla 7).
+# Las tablas de datos (horas, tarifas, piezas) viven en baremo_horas.yaml,
+# precios_taller.yaml y piezas.yaml; aquí solo van los parámetros del cálculo.
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+
+# ── Rango de incertidumbre P25–P75 ──────────────────────────────────────────
+# Banda HEURÍSTICA sobre la mano de obra (no un percentil estadístico
+# calibrado). El spread real de piezas (OEM vs aftermarket) se añade aparte.
+# RECALIBRAR contra importes reales pagados en Sprint 3 (MAE €).
+labor_uncertainty_band_pct: 20.0
+
+# ── Selección OEM vs aftermarket ────────────────────────────────────────────
+# Réplica numérica de piezas.yaml > selection_policy.use_oem_if (allí en texto).
+oem_selection:
+  age_years_max: 3            # Vehículos de <=3 años: OEM (garantía)
+  value_min_eur: 30000        # Vehículos premium: OEM
+  tech_oem_only: [xenon, led, matrix]   # Faros tecnológicos: solo OEM
+
+# Año de referencia para calcular la antigüedad del vehículo
+# (edad = reference_year - metadata.anio). Determinista (no usa la fecha actual).
+reference_year: 2026
+
+# ── Mapeo de confianza (numérico → estimacion.confidence_overall, 0-1) ──────
+# - low: alguna pieza no catalogada (se usó fallback) → el caso va a ámbar.
+# - medium: hubo que recurrir a un fallback del baremo (categoría/daño no exacto).
+# - high: todo resuelto con entradas exactas de baremo y catálogo.
+confidence_levels:
+  high: 0.90
+  medium: 0.70
+  low: 0.40
+
+# Precio orientativo si una familia de pieza no está ni en el catálogo ni en
+# piezas.yaml > fallback_prices. Conservador (alto) para no infravalorar.
+generic_part_fallback_eur: 400
