@@ -26,14 +26,19 @@ import pytest
 def synthetic_image() -> np.ndarray:
     """Deterministic BGR image (H=600, W=800, 3) as uint8.
 
-    Contains a high-contrast block so the Laplacian variance (sharpness) is
-    clearly non-zero — i.e. this image is NOT blurry and should pass the
-    sharpness check of the quality gate (T1.1).
+    A mid-grey canvas with a high-frequency checkerboard in the centre. The fine
+    edges give a high Laplacian variance, so this image clearly passes the
+    sharpness check of the quality gate (T1.1); a Gaussian blur of it (see
+    blurry_image_file) collapses that variance below the threshold. Brightness
+    stays mid-range so exposure is fine.
     """
     h, w = 600, 800
     img = np.full((h, w, 3), 127, dtype=np.uint8)
-    img[150:450, 200:600] = 30     # dark inner block
-    img[200:400, 250:550] = 220    # bright core → strong edges
+    tile = 8
+    for y in range(120, 480, tile):
+        for x in range(160, 640, tile):
+            shade = 70 if ((x // tile) + (y // tile)) % 2 == 0 else 185
+            img[y:y + tile, x:x + tile] = shade
     return img
 
 
