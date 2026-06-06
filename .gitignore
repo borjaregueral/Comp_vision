@@ -41,6 +41,9 @@ __pycache__/
 htmlcov/
 .pytest_cache/
 
+# ── Reportes de negocio generados (artefactos; no versionar por defecto) ──
+eval_business/*.html
+
 # ── Credenciales / secretos ──────────────────────────────────────
 .env
 kaggle.json

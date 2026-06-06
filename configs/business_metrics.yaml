@@ -1,0 +1,40 @@
+# ============================================================================
+# business_metrics.yaml — Parámetros de las métricas de negocio (T3.3)
+# ============================================================================
+# La métrica PRIMARIA del negocio es el MAE en €, no el mAP. Aquí se centralizan
+# los parámetros del cálculo y los objetivos (estos solo se muestran como
+# pass/fail; NO alteran los valores calculados).
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+
+# Tramos de importe (€) para estratificar el MAE. max=null = sin tope (control).
+importe_tramos:
+  - {name: "<500", max: 500}
+  - {name: "500-1500", max: 1500}
+  - {name: ">1500", max: null}
+
+# Carriles sobre los que se mide el MAE/within. Rojo va a peritaje presencial,
+# no se auto-liquida, así que no entra en el MAE de liquidación.
+mae_lanes: [verde, ambar]
+
+# Tolerancia para "% de estimaciones dentro de ±X% del valor real".
+within_pct: 0.15
+
+# Bootstrap para intervalos de confianza (semilla fija → reproducible).
+bootstrap:
+  n_resamples: 2000
+  seed: 42
+  alpha: 0.05            # IC del 95%
+
+# Orden de las clases de severidad (para Cohen's weighted kappa).
+severity_labels: [leve, moderado, severo]
+
+# Objetivos de negocio (solo para mostrar pass/fail en el reporte).
+targets:
+  mae_eur_max: 120.0
+  pct_green_min: 50.0
+  fn_structural_max_pct: 2.0
+  weighted_kappa_min: 0.75
+  within_15pct_min: 80.0
