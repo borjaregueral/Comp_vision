@@ -88,6 +88,27 @@ def test_rojo_claim_history(rules):
     assert (lane, rule_id) == ("rojo", "ROJO-5")
 
 
+def test_rojo_invalid_quality_with_manipulation(rules):
+    """ROJO-6: invalid quality only forces red when an image-manipulation alert is present."""
+    r = _green_report()
+    r["quality"] = {"valid": False,
+                    "per_image": [{"image_hash": _HASH, "valid": False, "problems": ["blurry"]}]}
+    r["alerts"] = [{"id": "image_manipulation", "severity": "warning",
+                    "description": "doble compresión JPEG"}]
+    lane, rule_id, reason = triage.assign_lane(r, _meta(), rules)
+    assert (lane, rule_id) == ("rojo", "ROJO-6")
+    assert "blurry" in reason
+
+
+def test_invalid_quality_without_manipulation_is_amber(rules):
+    """Invalid quality WITHOUT manipulation is not ROJO-6 (additional_condition) → amber."""
+    r = _green_report()
+    r["quality"] = {"valid": False,
+                    "per_image": [{"image_hash": _HASH, "valid": False, "problems": ["blurry"]}]}
+    lane, rule_id, _ = triage.assign_lane(r, _meta(), rules)
+    assert lane == "ambar"
+
+
 # ── Amber (default) ───────────────────────────────────────────────────
 
 def test_ambar_mid_cost(rules):
