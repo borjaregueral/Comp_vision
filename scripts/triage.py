@@ -170,6 +170,15 @@ def assign_lane(report: dict, metadata: dict, rules: Optional[dict] = None) -> T
             log.debug("triage decision: rojo (%s)", rid)
             return ("rojo", rid, reason)
 
+    # AMBAR-2 — valid quality but NO damage detected (possible false negative).
+    # Evaluated before green so a no-damage claim is never auto-resolved.
+    quality = report.get("quality", {}) or {}
+    if quality.get("valid") and len(report.get("damages", []) or []) == 0:
+        nd = rules.get("no_damage_amber", {}) or {}
+        reason = nd.get("reason_template", "") or nd.get("description", "")
+        log.debug("triage decision: ambar (%s) — sin daño con calidad válida", nd.get("id", "AMBAR-2"))
+        return ("ambar", nd.get("id", "AMBAR-2"), reason)
+
     # GREEN — every condition must hold.
     green = rules.get("green", {}) or {}
     checks = _green_checks(report, metadata, th)

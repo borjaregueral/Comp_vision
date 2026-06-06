@@ -36,78 +36,21 @@ from pathlib import Path
 from typing import Callable, Optional
 
 # Local modules (scripts/ is on sys.path when run as a script; tests add it too).
+import alerts
 import audit_log
+import claim_aggregator
+import estimate_cost
 import output_builder
 import quality_gate
+import severity
 import triage
 
 log = logging.getLogger("assess_claim")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PIPELINE_VERSION = "assess_claim/0.1.0"
+PIPELINE_VERSION = "assess_claim/0.2.0"  # Sprint 2: real cost/severity/alerts/aggregation
 
 _DAMAGE_TYPES = {"dent", "scratch", "crack", "broken_light"}
-
-
-# ── Placeholder stages (replaced by later Sprint-2 tasks) ────────────
-
-def _extension_from_area(area_pct: Optional[float]) -> str:
-    """Heuristic placeholder extension from damage area %. TODO T2.3: use the
-    severity matrix and the damaged part's area instead of a global %."""
-    if area_pct is None:
-        return "small"
-    if area_pct < 2:
-        return "small"
-    if area_pct < 10:
-        return "medium"
-    return "large"
-
-
-def _aggregate(per_image: list) -> list:
-    """Flatten per-image damage candidates into consolidated damages.
-
-    PLACEHOLDER (TODO T2.5): no cross-view deduplication yet — each candidate
-    becomes its own consolidated damage. Schema-required fields not computed at
-    this stage (zone/part/severity) are filled with safe placeholders.
-    """
-    damages = []
-    idx = 1
-    for image_hash, raw_list in per_image:
-        for raw in raw_list:
-            dtype = raw.get("type")
-            if dtype not in _DAMAGE_TYPES:
-                continue  # ignore anything outside the trained classes
-            damages.append({
-                "damage_id": f"D{idx}",
-                "type": dtype,
-                "zone": raw.get("zone", "unknown"),                 # TODO T1.5+: via localize.py
-                "part": raw.get("part", "unknown"),
-                "extension": raw.get("extension") or _extension_from_area(raw.get("area_pct")),
-                "severity": raw.get("severity", "leve"),            # TODO T2.3: severity matrix
-                "confidence": float(raw.get("confidence", 0.0)),
-                "supporting_images": [image_hash],
-                "structural_suspicion": bool(raw.get("structural_suspicion", False)),
-            })
-            idx += 1
-    return damages
-
-
-def _placeholder_estimacion(damages: list, metadata: dict) -> dict:
-    """Zeroed, schema-valid cost estimate. PLACEHOLDER (TODO T2.2).
-
-    confidence_overall is 0.0 on purpose: with no real costing, a claim must not
-    be eligible for the green (auto-resolve) lane.
-    """
-    return {
-        "total_eur": 0.0,
-        "p25_eur": 0.0,
-        "p75_eur": 0.0,
-        "breakdown": {"mano_obra": 0.0, "piezas": 0.0, "materiales": 0.0, "iva": 0.0},
-        "confidence_overall": 0.0,
-        "currency": "EUR",
-        "iva_included": True,
-        "parts_lookup_missing": [],
-    }
 
 
 # ── Production default components (lazy, untested offline) ───────────
@@ -166,8 +109,8 @@ def assess_claim(
         damage_detector: (image_path) -> list of raw damage dicts. Defaults to
             the real YOLO model; inject a fake to run offline.
         quality_vehicle_detector: Injected into the quality gate (offline tests).
-        estimator: (damages, metadata) -> estimacion dict. Defaults to the
-            zeroed placeholder (TODO T2.2).
+        estimator: optional (damages, metadata, province) -> cost dict override;
+            defaults to estimate_cost.estimate_repair_cost with the real tables.
         model_version / rules / quality_config / audit_config / schema: optional
             overrides, loaded from disk if None.
         log_dir: Audit log directory (defaults to configs value).
@@ -185,9 +128,35 @@ def assess_claim(
     rules = rules if rules is not None else triage.load_rules()
     quality_config = quality_config if quality_config is not None else quality_gate.load_config()
     audit_config = audit_config if audit_config is not None else audit_log.load_config()
-    estimator = estimator or _placeholder_estimacion
     damage_detector = damage_detector or _default_damage_detector()
     model_version = model_version or {"damage_model": "baseline_v1.0", "parts_model": "parts_seg_v1.0"}
+
+    province = metadata.get("provincia")
+    severity_matrix = severity.load_severity_matrix()
+    alerts_config = alerts.load_config()
+
+    # Cost estimator: the real estimate_cost (reference tables loaded ONCE) unless
+    # a custom estimator(damages, metadata, province) is injected.
+    if estimator is None:
+        _baremo = estimate_cost.load_baremo()
+        _precios = estimate_cost.load_precios()
+        _piezas = estimate_cost.load_piezas()
+        _est_cfg = estimate_cost.load_estimation_config()
+
+        def _estimate(dmgs):
+            return estimate_cost.estimate_repair_cost(
+                dmgs, metadata, province,
+                baremo=_baremo, precios=_precios, piezas=_piezas, config=_est_cfg,
+            )
+        pricing_versions = {
+            "baremo_horas": _baremo.get("version", "unknown"),
+            "precios_taller": _precios.get("version", "unknown"),
+            "piezas": _piezas.get("version", "unknown"),
+        }
+    else:
+        def _estimate(dmgs):
+            return estimator(dmgs, metadata, province)
+        pricing_versions = {"baremo_horas": "injected", "precios_taller": "injected", "piezas": "injected"}
 
     t0 = time.perf_counter()
 
@@ -213,25 +182,50 @@ def assess_claim(
         })
 
         if verdict["valid"]:
-            raw = damage_detector(img_path)
-            per_image_damages.append((image_hash, raw))
+            raw = [d for d in damage_detector(img_path) if d.get("type") in _DAMAGE_TYPES]
+            per_image_damages.append({"image_hash": image_hash, "damages": raw})
 
     quality = {
         "valid": any(q["valid"] for q in per_image_quality),
         "per_image": per_image_quality,
     }
 
-    # ── Aggregation (placeholder) + estimate (placeholder) ──
-    damages = _aggregate(per_image_damages)
-    estimacion = estimator(damages, metadata)
-    alerts = []  # TODO T2.4: real alert detection
+    # ── Multi-view aggregation (T2.5): dedup same damage across photos ──
+    aggregated = claim_aggregator.aggregate_claim(per_image_damages)
+    damages = aggregated["damages"]
+
+    # ── Per-damage economic severity (T2.3) using its own cost (T2.2) ──
+    for damage in damages:
+        damage_cost = _estimate([damage])
+        sev = severity.compute_severity(damage, damage_cost, matrix=severity_matrix)
+        damage["severity"] = sev["severity"]
+        damage["structural_suspicion"] = bool(damage.get("structural_suspicion")) or sev["structural_suspicion"]
+
+    # ── Claim-level cost estimate over UNIQUE consolidated damages (T2.2) ──
+    est = _estimate(damages)
+    estimacion = {
+        "total_eur": est["total_eur"],
+        "p25_eur": est["p25_eur"],
+        "p75_eur": est["p75_eur"],
+        "breakdown": est["breakdown"],
+        "confidence_overall": est["confidence"],
+        "currency": "EUR",
+        "iva_included": True,
+        "province_used": est.get("province_used", "default"),
+        "parts_lookup_missing": est.get("parts_lookup_missing", []),
+    }
+
+    # ── Alerts (T2.4). crops not wired yet → preexisting heuristic skipped. ──
+    claim_alerts = alerts.detect_alerts(
+        damages, metadata, crops=None, image_paths=image_paths, config=alerts_config
+    )
 
     zones_summary = {}
     for d in damages:
         zones_summary[d["zone"]] = zones_summary.get(d["zone"], 0) + 1
 
-    # ── Deterministic triage ──
-    report = {"quality": quality, "damages": damages, "estimacion": estimacion, "alerts": alerts}
+    # ── Deterministic triage (now on real cost / severity / alerts) ──
+    report = {"quality": quality, "damages": damages, "estimacion": estimacion, "alerts": claim_alerts}
     lane, rule_id, reason = triage.assign_lane(report, metadata, rules)
     next_action = (rules.get("next_actions", {}) or {}).get(lane, "Revisión manual.")
 
@@ -242,7 +236,8 @@ def assess_claim(
         "pipeline_version": PIPELINE_VERSION,
         "rules_versions": {
             "lane_rules": rules.get("version", "unknown"),
-            "quality_gate": quality_config.get("version", "unknown"),
+            "severity_matrix": severity_matrix.get("version", "unknown"),
+            **pricing_versions,
         },
     }
 
@@ -252,7 +247,7 @@ def assess_claim(
         quality=quality,
         damages=damages,
         estimacion=estimacion,
-        alerts=alerts,
+        alerts=claim_alerts,
         zones_summary=zones_summary,
         lane=lane,
         lane_rule_id=rule_id,

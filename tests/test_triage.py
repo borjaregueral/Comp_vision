@@ -167,6 +167,23 @@ def test_missing_estimacion_falls_to_amber(rules):
     assert (lane, rule_id) == ("ambar", "AMBAR-1")
 
 
+def test_valid_quality_no_damage_is_ambar2(rules):
+    """Valid images but no damage detected → AMBAR-2 (possible false negative)."""
+    r = _green_report()
+    r["damages"] = []
+    lane, rule_id, _ = triage.assign_lane(r, _meta(), rules)
+    assert (lane, rule_id) == ("ambar", "AMBAR-2")
+
+
+def test_no_damage_invalid_quality_is_ambar1(rules):
+    """No damage but invalid quality is the ordinary amber (AMBAR-1), not AMBAR-2."""
+    r = _green_report()
+    r["damages"] = []
+    r["quality"] = {"valid": False}
+    lane, rule_id, _ = triage.assign_lane(r, _meta(), rules)
+    assert (lane, rule_id) == ("ambar", "AMBAR-1")
+
+
 def test_lane_and_rule_id_contract(rules):
     lane, rule_id, reason = triage.assign_lane(_green_report(), _meta(), rules)
     assert lane in {"verde", "ambar", "rojo"}
