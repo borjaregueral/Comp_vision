@@ -1,0 +1,24 @@
+# ============================================================================
+# audit_log.yaml — Configuración del log estructurado de auditoría (JSONL)
+# ============================================================================
+# Cada evaluación del orquestador deja UNA línea JSON en el fichero del día.
+# El log es la base de trazabilidad regulatoria (AI Act / DORA): permite
+# reconstruir qué decidió el sistema, sobre qué imágenes (por hash) y con qué
+# versión de modelo y regla.
+#
+# NUNCA debe contener PII (matrícula, nombre, descripción del asegurado). Solo
+# identificadores internos (claim_id) y hashes.
+#
+# Versionado: cualquier cambio aquí actualiza version + effective_date.
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-06"
+
+# Directorio de logs (relativo a la raíz del proyecto). Está en .gitignore:
+# el contenido no se versiona, solo la estructura (logs/.gitkeep).
+log_dir: "logs"
+
+# Patrón del nombre de fichero. {date} se sustituye por la fecha (YYYYMMDD)
+# DERIVADA DEL TIMESTAMP del registro → rotación diaria automática.
+filename_pattern: "inference_{date}.jsonl"
