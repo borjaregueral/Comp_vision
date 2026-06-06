@@ -45,6 +45,9 @@ htmlcov/
 # ── Reportes de negocio generados (artefactos; no versionar por defecto) ──
 eval_business/*.html
 
+# ── Pruebas manuales locales (pueden contener matrículas/fotos — PII) ──
+smoke_test/
+
 # ── Credenciales / secretos ──────────────────────────────────────
 .env
 kaggle.json
