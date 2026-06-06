@@ -126,13 +126,14 @@ Aquí el sistema pasa de "detecta daños" a "estima coste". Es lo que justifica 
       ✓ 2026-06-06 · `scripts/alerts.py`: 4 detectores heurísticos (sin ML), cada alerta `{id, severity, description, evidence}` conforme al schema. `preexisting` = fracción HSV óxido en el crop (TODO v2 clasificador T4.4); `part_declaration_mismatch` = NLP simple normalizando acentos + mapa término→pieza (config) vs detectadas; `multiple_unrelated_damages` = ≥3 zonas/≥2 tipos (aterriza ESC-1 a nivel siniestro); `image_manipulation` = placeholder deshabilitado (id reservado para ROJO-6). **Política v1**: heurísticas emiten `warning` (→ ámbar), nunca `critical`, para no forzar rojos por falsos positivos; `critical` reservado a manipulación/fraude explícito. Config en `configs/alerts.yaml`. `tests/test_alerts.py`: 13 tests (mismatch del plan paragolpes↔puerta, sin/ con coincidencia, acento-insensible, multiple_unrelated, preexistente óxido/limpio/sin-crop, manipulación placeholder, conformidad con el schema de alerts, **critical→rojo ROJO-3** integración, v1 no emite critical), todos verdes; cobertura módulo 87%. Suite completa 111/111.
 
 ### T2.5 — Agregación multi-vista por siniestro
-- [ ] Crear `scripts/claim_aggregator.py`.
-- [ ] Función `aggregate_claim(reports_per_image) -> consolidated_report`.
-- [ ] Deduplicar daños: si dos detecciones en imágenes distintas refieren a la misma `(zona, tipo, área_overlap)`, fusionar.
-- [ ] Confianza por daño consolidado = media ponderada por confianza individual.
-- [ ] Coste total = suma sobre daños únicos consolidados, no sobre detecciones.
-- [ ] Resolver conflictos de zona por voting con peso por confianza.
+- [x] Crear `scripts/claim_aggregator.py`.
+- [x] Función `aggregate_claim(reports_per_image) -> consolidated_report`.
+- [x] Deduplicar daños: si dos detecciones en imágenes distintas refieren a la misma `(zona, tipo, área_overlap)`, fusionar.
+- [x] Confianza por daño consolidado = media ponderada por confianza individual.
+- [x] Coste total = suma sobre daños únicos consolidados, no sobre detecciones.
+- [x] Resolver conflictos de zona por voting con peso por confianza.
 - **Tests**: 3 fotos del mismo paragolpes con el mismo daño → 1 daño consolidado, no 3.
+      ✓ 2026-06-06 · `scripts/claim_aggregator.py`: `aggregate_claim(reports_per_image)` agrupa detecciones por `(tipo, región=part|zone)` y fusiona las de imágenes distintas → daño consolidado único. Confianza = media ponderada por confianza (Σc²/Σc); zona/pieza/categoría = voting ponderado por confianza (resuelve conflictos); extensión/severidad = máx; `structural_suspicion` = OR; `supporting_images` = hashes únicos. **Honestidad (regla 18)**: el "área_overlap" cruzado entre vistas NO es computable (distinto punto de vista) → asocio por `(tipo, pieza/zona)`, no IoU cruzado; YOLO ya hace NMS intra-imagen; dos daños distintos del mismo tipo en la misma pieza se reportan como 1 en v1 (limitación documentada). El coste se calculará sobre los consolidados en T2.6. `tests/test_claim_aggregator.py`: 9 tests (3 fotos paragolpes→1, daños distintos→2, media ponderada, voting de zona, OR estructural, extensión/severidad máx, fallback por zona, vacío), todos verdes; cobertura módulo 97%. Suite completa 120/120.
 
 ### T2.6 — Integrar todo en `assess_claim.py`
 - [ ] Actualizar el orquestador para incluir: estimación de coste, severidad económica, alertas, agregación.
