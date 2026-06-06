@@ -71,6 +71,7 @@ def run_inference(
     conf: float = 0.25,
     iou: float = 0.45,
     imgsz: int = 1024,
+    calibrator=None,
 ) -> dict:
     """Ejecuta inferencia en una imagen y estructura los resultados.
     
@@ -137,6 +138,15 @@ def run_inference(
                 "bbox": bbox,
                 "mask_polygon": polygon,
             })
+
+    # Calibración de confianza (T3.4): mapea conf cruda → calibrada SIN reentrenar.
+    # Conserva la cruda en confidence_raw para auditoría.
+    if calibrator is not None and damages:
+        raws = [d["confidence"] for d in damages]
+        cals = calibrator.transform(raws)
+        for d, raw, cal in zip(damages, raws, cals):
+            d["confidence_raw"] = raw
+            d["confidence"] = round(float(cal), 4)
 
     # Resumen
     total_area = sum(d["area_pct"] for d in damages)
@@ -279,6 +289,10 @@ def parse_args():
     parser.add_argument("--no-save-json", action="store_false", dest="save_json")
     parser.add_argument("--no-save-viz", action="store_false", dest="save_viz")
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--calibrate", action="store_true",
+                        help="Aplicar calibrador de confianza (T3.4) sin reentrenar el modelo.")
+    parser.add_argument("--calibrator", type=str, default=None,
+                        help="Ruta al calibrador .pkl (default: calibration.yaml > calibrator_path).")
     return parser.parse_args()
 
 
@@ -300,6 +314,14 @@ def main():
     model = YOLO(args.model)
     console.print(f"  Modelo: [cyan]{args.model}[/]")
 
+    # Calibrador de confianza (opcional, T3.4)
+    calibrator = None
+    if args.calibrate:
+        from calibrate_confidence import load_calibrator, load_config as _cal_cfg
+        cal_path = args.calibrator or (PROJECT_ROOT / _cal_cfg().get("calibrator_path"))
+        calibrator = load_calibrator(cal_path)
+        console.print(f"  Calibrador: [cyan]{cal_path}[/]")
+
     # Encontrar imágenes
     images = find_images(args.source)
     if not images:
@@ -319,7 +341,7 @@ def main():
     for img_path in images:
         console.rule(f"[dim]{img_path.name}[/]")
 
-        report = run_inference(model, img_path, args.conf, args.iou, args.imgsz)
+        report = run_inference(model, img_path, args.conf, args.iou, args.imgsz, calibrator=calibrator)
         all_reports.append(report)
 
         if report["damages"]:

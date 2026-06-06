@@ -1,0 +1,20 @@
+# ============================================================================
+# calibration.yaml — Calibración de confianza del modelo (T3.4)
+# ============================================================================
+# La confianza cruda de un detector no es una probabilidad fiable. Calibrarla
+# (sin reentrenar el modelo) hace que "confianza 0.85" signifique de verdad ~85%
+# de acierto, lo cual es crítico porque el umbral de carril verde usa 0.85.
+# ============================================================================
+
+version: "1.0.0"
+effective_date: "2026-06-07"
+
+# Método de calibración: isotonic (no paramétrico, recomendado con datos
+# suficientes) | platt (regresión logística, mejor con pocos datos).
+method: isotonic
+
+# Nº de bins para el reliability diagram / ECE.
+reliability_bins: 10
+
+# Dónde se guarda el calibrador ajustado (binario; gitignored).
+calibrator_path: "models/baseline_v1.0/confidence_calibrator.pkl"

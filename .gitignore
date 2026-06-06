@@ -28,6 +28,7 @@ logs/*
 # Pesos de modelos entrenados (las model cards y *_metadata.json SÍ se versionan).
 models/*/best.pt
 models/*/last.pt
+models/*/*.pkl              # calibradores de confianza (artefactos binarios)
 
 # ── Python ───────────────────────────────────────────────────────
 __pycache__/
