@@ -111,13 +111,33 @@ def _read_image(image_path: Path) -> np.ndarray:
 
 # ── Individual quality metrics ───────────────────────────────────────
 
-def assess_sharpness(image: np.ndarray) -> float:
+def assess_sharpness(image: np.ndarray, roi=None) -> float:
     """Return the variance of the Laplacian — the classic blur metric.
 
     A sharp image has strong high-frequency content → high variance. A blurry
     one is smooth → low variance.
+
+    Args:
+        image: BGR image.
+        roi: Optional [x1, y1, x2, y2] region (e.g. the vehicle bounding box).
+            When given, sharpness is measured ONLY inside it, so a large smooth
+            background (asphalt, sky) does not dilute the score. Falls back to
+            the whole image if the ROI is empty/degenerate.
+
+    Note:
+        This metric still under-reports on extreme close-ups of smooth painted
+        panels (little texture even when in focus). The threshold is therefore
+        deliberately low; real-photo calibration is pending (see model card).
     """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    target = image
+    if roi is not None:
+        h, w = image.shape[:2]
+        x1, y1, x2, y2 = (int(round(v)) for v in roi)
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+        if x2 > x1 and y2 > y1:
+            target = image[y1:y2, x1:x2]
+    gray = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
@@ -175,24 +195,38 @@ def detect_vehicle_present(
     )
 
     n_vehicles = 0
-    total_area = 0.0
+    # Rasterize qualifying boxes into a mask so overlapping detections of the
+    # same car are counted once (union area), not summed — a sum can exceed 1.0.
+    mask = np.zeros((img_h, img_w), dtype=bool)
+    ux1 = uy1 = float("inf")
+    ux2 = uy2 = float("-inf")
     if results:
         boxes = results[0].boxes
         if boxes is not None and len(boxes) > 0:
             for i in range(len(boxes)):
                 cls_id = int(boxes.cls[i])
                 conf = float(boxes.conf[i])
-                if cls_id in target_classes and conf >= min_confidence:
-                    x1, y1, x2, y2 = boxes.xyxy[i].tolist()
-                    total_area += max(0.0, x2 - x1) * max(0.0, y2 - y1)
-                    n_vehicles += 1
+                if cls_id not in target_classes or conf < min_confidence:
+                    continue
+                x1, y1, x2, y2 = boxes.xyxy[i].tolist()
+                xi1, yi1 = max(0, int(round(x1))), max(0, int(round(y1)))
+                xi2, yi2 = min(img_w, int(round(x2))), min(img_h, int(round(y2)))
+                if xi2 <= xi1 or yi2 <= yi1:
+                    continue
+                mask[yi1:yi2, xi1:xi2] = True
+                ux1, uy1 = min(ux1, xi1), min(uy1, yi1)
+                ux2, uy2 = max(ux2, xi2), max(uy2, yi2)
+                n_vehicles += 1
 
-    area_fraction = total_area / float(img_w * img_h) if img_w and img_h else 0.0
+    union_area = int(mask.sum())
+    area_fraction = union_area / float(img_w * img_h) if img_w and img_h else 0.0
     detected = n_vehicles > 0 and area_fraction >= min_area_fraction
+    bbox = [int(ux1), int(uy1), int(ux2), int(uy2)] if n_vehicles > 0 else None
     return {
         "vehicle_detected": bool(detected),
         "vehicle_area_fraction": round(float(area_fraction), 4),
         "n_vehicles": int(n_vehicles),
+        "bbox": bbox,
     }
 
 
@@ -298,11 +332,34 @@ def assess_quality(
     problems: list[str] = []
     scores: dict = {}
 
-    # ── Sharpness ──
+    # ── Vehicle presence ──
+    # Run first: its bounding box focuses the sharpness check below on the
+    # vehicle instead of the (often smooth) background.
+    vehicle = None
+    veh_cfg = config.get("vehicle_present", {})
+    if check_vehicle and veh_cfg.get("enabled", True):
+        if vehicle_detector is None:
+            def vehicle_detector(img):  # noqa: E306 - local default, real YOLO path
+                return detect_vehicle_present(
+                    img,
+                    model_path=veh_cfg.get("model", "yolo11n.pt"),
+                    target_classes=tuple(veh_cfg.get("target_classes", (2, 5, 7))),
+                    min_confidence=veh_cfg.get("min_confidence", 0.50),
+                    min_area_fraction=veh_cfg.get("min_area_fraction", 0.10),
+                )
+        vehicle = vehicle_detector(image)
+        scores["vehicle_detected"] = bool(vehicle.get("vehicle_detected", False))
+        scores["vehicle_area_fraction"] = vehicle.get("vehicle_area_fraction", 0.0)
+        if veh_cfg.get("blocking", True) and not vehicle.get("vehicle_detected", False):
+            problems.append("no_vehicle")
+
+    # ── Sharpness (measured on the vehicle ROI when available) ──
     sharp_cfg = config.get("sharpness", {})
     if sharp_cfg.get("enabled", True):
-        variance = assess_sharpness(image)
+        roi = vehicle.get("bbox") if (vehicle and sharp_cfg.get("use_vehicle_roi", True)) else None
+        variance = assess_sharpness(image, roi=roi)
         scores["sharpness"] = round(variance, 2)
+        scores["sharpness_scope"] = "vehicle_roi" if roi else "full_image"
         if sharp_cfg.get("blocking", True) and variance < sharp_cfg.get("laplacian_variance_min", 80.0):
             problems.append("blurry")
 
@@ -322,33 +379,21 @@ def assess_quality(
             if mean > exp_cfg.get("mean_brightness_max", 220) and "overexposed" not in problems:
                 problems.append("overexposed")
 
-    # ── Resolution ──
+    # ── Resolution (orientation-independent) ──
+    # Adequacy must not depend on portrait vs landscape: an 800x600 photo and
+    # its 600x800 rotation carry the same detail, so compare the long/short
+    # sides against the long/short minimums.
     res_cfg = config.get("resolution", {})
     if res_cfg.get("enabled", True):
         resolution = assess_resolution(image)
         scores.update(resolution)
         if res_cfg.get("blocking", True):
-            if (resolution["width"] < res_cfg.get("min_width", 800)
-                    or resolution["height"] < res_cfg.get("min_height", 600)):
+            long_min = max(res_cfg.get("min_width", 800), res_cfg.get("min_height", 600))
+            short_min = min(res_cfg.get("min_width", 800), res_cfg.get("min_height", 600))
+            long_side = max(resolution["width"], resolution["height"])
+            short_side = min(resolution["width"], resolution["height"])
+            if long_side < long_min or short_side < short_min:
                 problems.append("low_resolution")
-
-    # ── Vehicle presence ──
-    veh_cfg = config.get("vehicle_present", {})
-    if check_vehicle and veh_cfg.get("enabled", True):
-        if vehicle_detector is None:
-            def vehicle_detector(img):  # noqa: E306 - local default, real YOLO path
-                return detect_vehicle_present(
-                    img,
-                    model_path=veh_cfg.get("model", "yolo11n.pt"),
-                    target_classes=tuple(veh_cfg.get("target_classes", (2, 5, 7))),
-                    min_confidence=veh_cfg.get("min_confidence", 0.50),
-                    min_area_fraction=veh_cfg.get("min_area_fraction", 0.10),
-                )
-        vehicle = vehicle_detector(image)
-        scores["vehicle_detected"] = bool(vehicle.get("vehicle_detected", False))
-        scores["vehicle_area_fraction"] = vehicle.get("vehicle_area_fraction", 0.0)
-        if veh_cfg.get("blocking", True) and not vehicle.get("vehicle_detected", False):
-            problems.append("no_vehicle")
 
     # ── EXIF stripping (RGPD) ──
     exif_removed = False
