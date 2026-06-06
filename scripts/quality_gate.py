@@ -285,8 +285,10 @@ def extract_and_strip_exif(image_path, output_path=None) -> dict:
     # copy was requested. Avoids needless recompression of already-clean files.
     if had or output_path:
         clean = Image.fromarray(pixels)
-        save_kwargs = {"quality": 95} if target.suffix.lower() in {".jpg", ".jpeg"} else {}
-        clean.save(target, **save_kwargs)
+        if target.suffix.lower() in {".jpg", ".jpeg"}:
+            clean.save(target, quality=95)
+        else:
+            clean.save(target)
         removed = had
 
     return {
@@ -339,7 +341,7 @@ def assess_quality(
     veh_cfg = config.get("vehicle_present", {})
     if check_vehicle and veh_cfg.get("enabled", True):
         if vehicle_detector is None:
-            def vehicle_detector(img):  # noqa: E306 - local default, real YOLO path
+            def _default_vehicle_detector(img):  # local default, real YOLO path
                 return detect_vehicle_present(
                     img,
                     model_path=veh_cfg.get("model", "yolo11n.pt"),
@@ -347,6 +349,7 @@ def assess_quality(
                     min_confidence=veh_cfg.get("min_confidence", 0.50),
                     min_area_fraction=veh_cfg.get("min_area_fraction", 0.10),
                 )
+            vehicle_detector = _default_vehicle_detector
         vehicle = vehicle_detector(image)
         scores["vehicle_detected"] = bool(vehicle.get("vehicle_detected", False))
         scores["vehicle_area_fraction"] = vehicle.get("vehicle_area_fraction", 0.0)

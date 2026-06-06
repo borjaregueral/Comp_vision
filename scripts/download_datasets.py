@@ -274,7 +274,7 @@ def find_coco_annotations(dataset_dir: Path) -> list[Path]:
     return results
 
 
-def find_images(dataset_dir: Path, extensions: set[str] = None) -> list[Path]:
+def find_images(dataset_dir: Path, extensions: Optional[set[str]] = None) -> list[Path]:
     """Busca todas las imágenes en un directorio."""
     if extensions is None:
         extensions = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

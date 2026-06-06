@@ -16,6 +16,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -182,7 +183,7 @@ def draw_visualization(
     image_path: Path,
     report: dict,
     alpha: float = 0.4,
-) -> np.ndarray:
+) -> Optional[np.ndarray]:
     """Dibuja las máscaras y bboxes sobre la imagen."""
     image = cv2.imread(str(image_path))
     if image is None:
@@ -318,7 +319,7 @@ def main():
     calibrator = None
     if args.calibrate:
         from calibrate_confidence import load_calibrator, load_config as _cal_cfg
-        cal_path = args.calibrator or (PROJECT_ROOT / _cal_cfg().get("calibrator_path"))
+        cal_path = args.calibrator or (PROJECT_ROOT / str(_cal_cfg().get("calibrator_path") or ""))
         calibrator = load_calibrator(cal_path)
         console.print(f"  Calibrador: [cyan]{cal_path}[/]")
 

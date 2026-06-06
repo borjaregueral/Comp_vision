@@ -118,7 +118,7 @@ def _resolve_baremo(part_category: str, damage_type: str, extension: str, baremo
     return leaf, exact
 
 
-def _match_key(value: Optional[str], mapping: dict, aliases: dict = None):
+def _match_key(value: Optional[str], mapping: dict, aliases: Optional[dict] = None):
     """Case-insensitive key match (with optional alias map). Returns the real key or None."""
     if not value:
         return None
