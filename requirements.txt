@@ -30,3 +30,8 @@ jinja2
 pyyaml
 tqdm
 rich
+
+# Testing & validation (operational layer)
+pytest
+pytest-cov
+jsonschema

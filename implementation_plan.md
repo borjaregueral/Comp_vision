@@ -1,480 +1,261 @@
-# Sistema de Fotoperitación: Detección y Segmentación de Daños en Vehículos
+# PLAN DE IMPLEMENTACIÓN — Comp_vision → Producción Aseguradora
 
-Sistema end-to-end para detectar, segmentar y clasificar daños simples en vehículos a partir de imágenes, generando un dataset anotado reutilizable.
-
-## Alcance
-
-**Daños incluidos (4 clases):**
-| Clase | ID | Descripción |
-|---|---|---|
-| `dent` | 0 | Abolladuras, golpes, deformaciones de chapa |
-| `scratch` | 1 | Arañazos, rozaduras, marcas de pintura |
-| `crack` | 2 | Grietas, roturas de plástico/paragolpes |
-| `broken_light` | 3 | Faros, pilotos, intermitentes rotos |
-
-**Excluidos explícitamente:** pinchazos/neumáticos (`flat_tire`) y lunas/cristales (`glass_shatter`)
+> **Cómo usar este plan**: ejecuta las tareas en orden. Cada una tiene un objetivo, archivos a tocar, tests requeridos y criterio de aceptación. No saltes sprints. Marca `[x]` al completar y añade fecha + hash de commit en la nota.
 
 ---
 
-## Arquitectura del Sistema
+## SPRINT 0 — Pre-flight check (1 día)
 
-```mermaid
-graph LR
-    A["Datasets públicos<br/>(VehiDE + CarDD + Roboflow)"] --> B["Filtrado y unificación<br/>de clases"]
-    B --> C["Auto-etiquetado<br/>Autodistill<br/>(GroundingDINO + SAM2)"]
-    C --> D["Revisión humana<br/>CVAT + SAM"]
-    D --> E["Dataset YOLO-seg<br/>train/val/test"]
-    E --> F["Entrenamiento<br/>YOLOv11m-seg<br/>(2 fases)"]
-    F --> G["Modelo fine-tuned"]
-    G --> H["Inferencia + Informes"]
-```
+Antes de tocar nada, verifica el estado del entrenamiento y prepara la infraestructura.
 
----
+### T0.1 — Verificar estado del entrenamiento en curso
+- [x] Comprobar que el entrenamiento Fase 2 está corriendo o ha terminado.
+- [ ] Si está corriendo: documentar epoch actual, mejores métricas hasta ahora, ETA.
+- [ ] Si ha terminado: copiar `best.pt` a `models/baseline_v1.0/` y registrar en `data_lineage.yaml`.
+- **Salida**: `models/baseline_v1.0/best.pt` + `models/baseline_v1.0/training_metadata.json`.
+      ⏸ EN ESPERA 2026-06-06: el run Fase 2 corre en GPU remota (SSH, ver `setup_gpu.sh`); no hay `best.pt` en local (`runs/` vacío, sin `results.csv`, único `.pt` es el base COCO `yolo11m-seg.pt`). No se puede generar `models/baseline_v1.0/` ni documentar epoch/métricas/ETA hasta tener acceso a los artefactos del run. Confirmado con el usuario.
 
-## User Review Required
+### T0.2 — Crear estructura de directorios nueva
+- [x] Crear `schemas/`, `logs/`, `model_cards/`, `business_rules/`, `tests/`, `golden_set/` (gitignored), `eval_business/`.
+- [x] Añadir `.gitkeep` donde proceda.
+- [x] Actualizar `.gitignore` con `golden_set/`, `logs/`, `models/*/best.pt`.
+      ✓ 2026-06-06 · `schemas/` y `business_rules/` ya existían (commit 61ae209); creados `logs/`, `model_cards/`, `tests/`, `golden_set/`, `eval_business/` con `.gitkeep`. `.gitignore`: `golden_set/*` y `logs/*` (con negación para `.gitkeep`/`README.md`) + `models/*/best.pt` y `models/*/last.pt`. Verificado con `git check-ignore`. (commit pendiente)
 
-> [!IMPORTANT]
-> **Elección de modelo base**: Recomiendo **YOLOv11m-seg** (~10M params). El modelo `s` (~2.6M) es más resistente al overfitting pero menos preciso en daños finos. El modelo `x` (~62M) sobreajustaría con <5K imágenes. Si tienes >10K imágenes revisadas, podemos escalar a `l` o `x`.
-
-> [!WARNING]
-> **GPU necesaria**: El entrenamiento requiere GPU (mín. 8GB VRAM). Recomiendo Google Colab Pro (T4/A100) o una RTX 3060+ local. Autodistill (GroundingDINO+SAM2) necesita ~12GB VRAM, o se puede correr en Colab.
-
-> [!IMPORTANT]
-> **Herramienta de anotación**: Recomiendo **CVAT** (open-source, self-hosted con Docker). Tiene la mejor integración con SAM para asistencia AI en la corrección de masks. Alternativa: Label Studio si prefieres workflows más configurables.
-
-## Open Questions
-
-> [!IMPORTANT]
-> 1. **¿Tienes acceso a GPU?** (local o cloud — define si usamos Colab o scripts locales)
-> 2. **¿Tamaño objetivo del dataset final?** Recomiendo mínimo ~2,000 imágenes revisadas por humano
-> 3. **¿Quieres API REST** (FastAPI) para servir predicciones, o solo scripts CLI?
-> 4. **¿Despliegue final?** Servidor GPU, edge device, o móvil (afecta el formato de exportación)
+### T0.3 — Setup de testing
+- [x] Añadir `pytest`, `pytest-cov`, `jsonschema` a `requirements.txt`.
+- [x] Crear `tests/conftest.py` con fixtures básicas (imagen sintética, predicción mock, metadata mock).
+- [x] Configurar `pyproject.toml` o `pytest.ini` para ejecutar con `pytest tests/`.
+- **Tests**: `pytest --collect-only` debe descubrir la carpeta sin errores.
+      ✓ 2026-06-06 · venv gestionado con `uv` (sin pip): pytest 9.0.3 + pytest-cov 7.1.0 instalados con `uv pip`. `pytest.ini` con `testpaths=tests`. `conftest.py` con fixtures (imagen sintética + variantes borrosa/oscura para T1.1, predicción mock = contrato de `predict.run_inference`, metadata mock = campos de `lane_rules.yaml`). `tests/test_fixtures_smoke.py`: 5 tests, todos verdes. `pytest --collect-only` OK. (commit pendiente)
 
 ---
 
-## Fase 1: Datasets Públicos — Recopilación y Unificación
+## SPRINT 1 — Capa de orquestación operativa (3-5 días)
 
-### Fuentes de datos (priorizadas)
+Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cambia todo a su alrededor.
 
-| # | Dataset | Imágenes | Instancias | Formato | Licencia | Rol |
-|---|---------|----------|------------|---------|----------|-----|
-| 1 | **VehiDE** | 13,945 | 32,000+ | COCO JSON | Apache 2.0 ✅ | **Dataset principal** |
-| 2 | **CarDD** (USTC) | 4,000 | 9,000+ | COCO JSON | Research-only ⚠️ | Complemento académico |
-| 3 | **SInfo Segmentation** (Roboflow) | 4,303 | Variable | YOLO/COCO | CC BY 4.0 ✅ | Segmentación adicional |
-| 4 | **Curacel AI** (Roboflow) | ~2,000 | Variable | YOLO | CC BY 4.0 ✅ | Datos insurtech |
-| 5 | **SYNDCAR** (Mendeley) | 245 | Variable | YOLO | CC BY 4.0 ✅ | Parts segmentation |
+### T1.1 — Quality Gate (filtro de calidad de imagen)
+- [ ] Crear `scripts/quality_gate.py`.
+- [ ] Funciones: `assess_sharpness` (varianza Laplaciano), `assess_exposure` (% píxeles saturados sub/sobre), `assess_resolution` (min 800x600), `detect_vehicle_present` (usar `yolo11n.pt` COCO, clase car/truck), `extract_and_strip_exif`.
+- [ ] Salida: dict `{valid: bool, problems: list[str], scores: dict, exif_removed: bool}`.
+- [ ] Configuración en `configs/quality_gate.yaml`: umbrales por criterio.
+- **Tests**: imagen borrosa → invalid; imagen oscura → invalid; imagen OK → valid; imagen sin coche → invalid.
+- **Criterio**: `pytest tests/test_quality_gate.py` pasa al 100%.
 
-> [!NOTE]
-> **CarDD** requiere solicitar acceso por email a `wangxk0624@mail.ustc.edu.cn`. Alternativamente hay mirrors en HuggingFace (`harpreetsahota/CarDD`) y Kaggle.
+### T1.2 — Schema JSON de salida v1
+- [ ] Crear `schemas/inference_output_v1.json` (JSON Schema) con campos: `id_evaluacion`, `timestamp`, `version_modelo`, `quality`, `damages[]`, `zones`, `alerts[]`, `estimacion`, `lane`, `lane_reason`, `next_action`, `audit`.
+- [ ] Crear `scripts/output_builder.py` que tome los outputs intermedios y los emita validados contra el schema.
+- [ ] Si la validación falla, lanzar excepción explícita (no fallar silenciosamente).
+- **Tests**: output válido pasa validación; output con campo faltante falla con mensaje claro.
 
-### Proceso de obtención y unificación
+### T1.3 — Triaje determinista (verde/ámbar/rojo)
+- [ ] Crear `scripts/triage.py` y `business_rules/lane_rules.yaml`.
+- [ ] Implementar `assign_lane(report, metadata) -> (lane, rule_id, reason)`.
+- [ ] Reglas en YAML (no en código), con ID estable (`VERDE-1`, `AMBAR-2`, `ROJO-3`) y `effective_date`.
+- [ ] Reglas iniciales:
+  - **ROJO**: daño estructural sospechado / `total_eur > 1500` (placeholder hasta T2.1) / vehículo `valor > 40000` / `siniestros_12m >= 4` / alerta de fraude.
+  - **VERDE**: `confidence_mean >= 0.85` Y `quality.valid` Y `total_eur < 800` Y sin alertas Y `siniestros_12m <= 2`.
+  - **ÁMBAR**: resto.
+- [ ] Output incluye `lane`, `rule_id`, `reason_human_readable`.
+- **Tests**: 6 casos cubriendo cada regla; un caso "edge" justo en el umbral.
 
-#### [NEW] [download_datasets.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/download_datasets.py)
-- Descarga automática de VehiDE (Kaggle API), SInfo/Curacel (Roboflow API), SYNDCAR (Mendeley)
-- CarDD: instrucciones para descarga manual + script de procesamiento
-- **Filtrado**: elimina imágenes etiquetadas con `flat_tire`, `glass_shatter`, `tire flat`, `glass shatter`
-- **Remapping unificado** de clases heterogéneas → 4 clases target:
+### T1.4 — Logging estructurado de auditoría
+- [ ] Crear `scripts/audit_log.py`.
+- [ ] Cada inferencia genera línea JSONL en `logs/inference_{YYYYMMDD}.jsonl` con: timestamp, input_hash (SHA256 de la imagen), model_version, output_summary (lane + total_eur + n_damages), rule_id_applied, processing_time_ms.
+- [ ] Rotación diaria. No PII en los logs (sin matrícula, sin nombre).
+- **Tests**: una inferencia genera exactamente una línea JSONL parseable; hash es determinista.
 
-```python
-CLASS_MAPPING = {
-    # CarDD mapping
-    "Dent": "dent",       "Scratch": "scratch",
-    "Crack": "crack",     "Lamp Broken": "broken_light",
-    "Glass Shatter": None,  # EXCLUIR
-    "Tire Flat": None,      # EXCLUIR
-    
-    # VehiDE / Roboflow mappings
-    "dent": "dent",       "bonnet-dent": "dent",    "door-dent": "dent",
-    "scratch": "scratch", "door-scratch": "scratch", "paint_damage": "scratch",
-    "crack": "crack",     "broken_bumper": "crack",
-    "broken_lamp": "broken_light", "headlight": "broken_light",
-    "broken_glass": None, "flat_tire": None,  # EXCLUIR
-}
-```
-
-- Conversión de todas las anotaciones → formato COCO unificado
-
-#### [NEW] [unify_to_yolo.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/unify_to_yolo.py)
-- Convierte COCO JSON unificado → formato YOLO segmentación (txt con polígonos normalizados)
-- Genera splits train/val/test (70/20/10)
-- Crea `dataset.yaml` compatible con Ultralytics
-- Estadísticas de distribución de clases y balanceo
-
-#### [NEW] [data_config.yaml](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/configs/data_config.yaml)
-```yaml
-classes:
-  0: dent
-  1: scratch
-  2: crack
-  3: broken_light
-
-excluded_classes:
-  - glass_shatter
-  - flat_tire
-  - broken_glass
-  - tire_flat
-
-splits:
-  train: 0.7
-  val: 0.2
-  test: 0.1
-
-min_bbox_area: 100        # Filtrar anotaciones demasiado pequeñas (ruido)
-min_polygon_points: 4     # Mínimo puntos por polígono
-```
+### T1.5 — Orquestador principal (`assess_claim.py`)
+- [ ] Crear `scripts/assess_claim.py` como punto de entrada operativo único.
+- [ ] Flujo: cargar imágenes → quality gate por imagen → inferencia daños + zonas → agregación (placeholder hasta T2.5) → triaje → audit log → emitir JSON validado.
+- [ ] CLI: `python scripts/assess_claim.py --claim-id X --images dir/ --metadata file.json`.
+- **Tests**: ejecuta sobre 3 imágenes mock + metadata mock y produce JSON válido contra el schema; deja entrada en audit log.
+- **Criterio de aceptación del Sprint 1**: `python scripts/assess_claim.py` corre end-to-end sobre un caso sintético y produce output válido + log. Ningún test falla.
 
 ---
 
-## Fase 2: Auto-etiquetado con Autodistill (GroundingDINO + SAM2)
+## SPRINT 2 — Estimación económica y agregación multi-vista (5-7 días)
 
-Para imágenes sin anotar o para complementar datasets existentes. Usa modelos foundation para generar masks automáticas.
+Aquí el sistema pasa de "detecta daños" a "estima coste". Es lo que justifica el ROI.
 
-### Pipeline con Autodistill
+### T2.1 — Tablas de referencia (baremos, precios, piezas)
+- [ ] Crear `configs/baremo_horas.yaml`: para cada `(parte, tipo_daño, severidad_visual)` → `(horas_chapa, horas_pintura, decision: repair|replace|paint_only)`.
+- [ ] Crear `configs/precios_taller.yaml`: €/h por provincia (datos placeholder con TODO claro, referencia CETRAA/Centro Zaragoza).
+- [ ] Crear `configs/piezas.yaml`: 20 piezas top siniestrables × marcas top (Seat, Renault, Peugeot, VW, Toyota, Ford) con precio OEM y aftermarket. Placeholder con TODO.
+- [ ] Documentar en `configs/REFERENCES.md` qué fuente alimenta cada tabla y proceso de actualización.
+- **Tests**: las tres tablas parsean sin errores; cobertura mínima documentada.
 
-```mermaid
-graph TD
-    A["Imágenes sin anotar"] --> B["Autodistill"]
-    B --> C["GroundingDINO<br/>(detección zero-shot)"]
-    C -->|"text prompts por clase"| D["Bounding boxes<br/>+ confianza"]
-    D --> E["SAM2<br/>(segmentación)"]
-    E -->|"pixel masks"| F["Filtro confianza > 0.35"]
-    F --> G["Dataset YOLO-seg"]
-    G --> H["Revisión en CVAT"]
-```
+### T2.2 — Módulo de estimación de coste
+- [ ] Crear `scripts/estimate_cost.py`.
+- [ ] Función `estimate_repair_cost(damages, vehicle_metadata, province) -> {total_eur, p25, p75, breakdown, confidence}`.
+- [ ] Maneja sustitución vs reparación según baremo.
+- [ ] Devuelve **rango P25-P75**, no solo punto medio. Ante incertidumbre, usar P75 para liquidar (regla conservadora).
+- [ ] Si una pieza no está en `piezas.yaml`, devolver `confidence: low` y derivar a ámbar.
+- **Tests**: caso "rayón paragolpes Seat Ibiza" → coste en rango razonable; caso pieza desconocida → confidence low.
 
-#### [NEW] [auto_label.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/auto_label.py)
+### T2.3 — Matriz de severidad económica
+- [ ] Eliminar la lógica naïve de severidad por % área de `predict.py` (sustituir, no borrar el archivo).
+- [ ] Crear `business_rules/severity_matrix.yaml`: cada combinación `(parte_categoria, tipo_daño, extension)` → severidad económica (`leve | moderado | severo`).
+- [ ] Función `compute_severity(damage_with_zone, cost_estimate)` en `scripts/severity.py`.
+- [ ] Severidad final = max(severidad_visual, severidad_económica).
+- **Tests**: faro xenón con crack pequeño → severo; rayón grande en parachoques plástico → leve a moderado.
 
-```python
-from autodistill_grounded_sam import GroundedSAM
-from autodistill.detection import CaptionOntology
+### T2.4 — Detección de alertas (preexistente, fraude, inconsistencia)
+- [ ] Crear `scripts/alerts.py`.
+- [ ] Implementar detectores iniciales (heurísticos, no ML):
+  - `alert_preexisting_damage`: crop del daño + clasificador simple sobre presencia de óxido/suciedad/decoloración (puede ser placeholder con TODO para v2 con clasificador entrenado).
+  - `alert_part_declaration_mismatch`: compara partes detectadas vs `descripcion_asegurado` del metadata (NLP simple, fuzzy match).
+  - `alert_multiple_unrelated_damages`: si hay daños en 3+ zonas no contiguas con tipologías muy distintas, marcar.
+  - `alert_image_manipulation`: comprobar consistencia de metadata EXIF, presencia de doble compresión JPEG (placeholder con TODO).
+- [ ] Cada alerta tiene `id`, `severity` (info|warning|critical), `description`.
+- [ ] Las alertas `critical` fuerzan carril rojo.
+- **Tests**: caso con descripción "paragolpes" y daño detectado en puerta → alerta mismatch.
 
-# Ontología de daños para fotoperitación
-ontology = CaptionOntology({
-    "dent on car body . vehicle dent . panel dent . body damage indentation": "dent",
-    "scratch on car paint . paint scratch . key scratch . scrape mark": "scratch",
-    "crack on car bumper . plastic crack . broken bumper piece": "crack",
-    "broken headlight . broken taillight . smashed car lamp . cracked light": "broken_light",
-})
+### T2.5 — Agregación multi-vista por siniestro
+- [ ] Crear `scripts/claim_aggregator.py`.
+- [ ] Función `aggregate_claim(reports_per_image) -> consolidated_report`.
+- [ ] Deduplicar daños: si dos detecciones en imágenes distintas refieren a la misma `(zona, tipo, área_overlap)`, fusionar.
+- [ ] Confianza por daño consolidado = media ponderada por confianza individual.
+- [ ] Coste total = suma sobre daños únicos consolidados, no sobre detecciones.
+- [ ] Resolver conflictos de zona por voting con peso por confianza.
+- **Tests**: 3 fotos del mismo paragolpes con el mismo daño → 1 daño consolidado, no 3.
 
-base_model = GroundedSAM(ontology=ontology)
-
-# Generar anotaciones automáticas
-base_model.label(
-    input_folder="./data/raw/unlabeled",
-    output_folder="./data/auto_labeled"
-)
-```
-
-> [!TIP]
-> **Precisión esperada del auto-labeling**: ~70-80%. El 20-30% restante se corrige en la revisión humana (Fase 3). Esto es **mucho más rápido** que anotar desde cero (reducción de ~5x en tiempo de anotación).
-
-#### [NEW] [auto_label_config.yaml](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/configs/auto_label_config.yaml)
-- Prompts optimizados por clase (con sinónimos y variaciones)
-- Thresholds de confianza por clase (scratches suelen tener scores más bajos)
-- Rutas de entrada/salida
-- Batch size y opciones de GPU
-
----
-
-## Fase 3: Revisión Humana en CVAT
-
-### Setup de CVAT
-
-```bash
-# Levantar CVAT con Docker (incluye SAM integration)
-docker compose -f docker-compose.yml -f components/serverless/docker-compose.serverless.yml up -d
-```
-
-### Workflow de revisión
-
-1. **Importar** anotaciones auto-generadas (COCO JSON) como proyecto CVAT
-2. **Usar SAM integrado** en CVAT para corregir masks rápidamente (click para refinar)
-3. **Revisar** por prioridad: primero imágenes con scores bajos de confianza
-4. **QA**: Segundo revisor valida ~10% de las anotaciones
-5. **Exportar** en formato YOLO segmentation
-
-#### [NEW] [prepare_for_review.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/prepare_for_review.py)
-- Ordena imágenes por confianza media (low → high) para priorizar revisión
-- Genera thumbnails con overlay de las masks auto-generadas
-- Crea proyecto CVAT importable (XML/ZIP)
-- Estadísticas de distribución de confianza por clase
-
-#### [NEW] [export_reviewed.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/export_reviewed.py)
-- Importa anotaciones revisadas desde CVAT (exportadas como COCO/YOLO)
-- Merge con dataset ya existente (evita duplicados)
-- Re-genera splits train/val/test balanceados
-- Genera `dataset.yaml` final para Ultralytics
-- Report de estadísticas finales del dataset
+### T2.6 — Integrar todo en `assess_claim.py`
+- [ ] Actualizar el orquestador para incluir: estimación de coste, severidad económica, alertas, agregación.
+- [ ] Actualizar las reglas de triaje en `lane_rules.yaml` para usar el coste real (no placeholder).
+- [ ] Actualizar el schema `inference_output_v1.json` si hay campos nuevos → si los hay, crear `v2.json` y mantener `v1.json` (versionado, no rotura).
+- **Criterio de aceptación del Sprint 2**: una llamada al orquestador con 4 fotos de un siniestro real produce un JSON con coste estimado en €, rango P25-P75, severidad, alertas y carril asignado. Audit log completo.
 
 ---
 
-## Fase 4: Entrenamiento del Modelo (2 Fases)
+## SPRINT 3 — Golden set y métricas de negocio (5-7 días)
 
-### Estrategia de entrenamiento en 2 fases
+Sin esto, no sabes si el sistema funciona en producción.
 
-```mermaid
-graph LR
-    A["YOLOv11m-seg.pt<br/>(pretrained COCO)"] --> B["Fase 1: Freeze backbone<br/>20 epochs, lr=0.01"]
-    B --> C["Fase 2: Unfreeze all<br/>280 epochs, lr=0.001"]
-    C --> D["best.pt<br/>(modelo final)"]
-```
+### T3.1 — Definición del golden set
+- [ ] Documentar en `golden_set/README.md`: criterios de selección (500-1.000 siniestros cerrados de parking, importes <1.500€, último año), fuentes (extracto de cartera Mutua), proceso de anonimización.
+- [ ] Definir esquema de ground truth: archivo JSON por siniestro con campos canónicos (importe final pagado, piezas reparadas/sustituidas, horas reales, decisión final del perito, severidad oficial).
+- [ ] **Esta tarea es coordinación con Mutua, no código**. Bloquea T3.2.
 
-> [!TIP]
-> **Por qué 2 fases**: Con datasets pequeños (<5K), entrenar todo el modelo de golpe puede destruir los features del backbone pretrained. Congelamos primero para adaptar solo la cabeza de segmentación, luego fine-tuneamos todo con learning rate bajo.
+### T3.2 — Carga y validación del golden set
+- [ ] Crear `scripts/load_golden_set.py`.
+- [ ] Validar cada entrada contra el esquema definido en T3.1.
+- [ ] Estratificar por tramos de importe: `<500`, `500-1500`, `>1500` (este último es de control, debe ir a rojo).
+- [ ] Reportar estadísticas: distribución por marca, color, provincia, tipo de daño dominante.
+- **Tests**: rechaza entradas con campos faltantes; estratifica correctamente.
 
-#### [NEW] [train.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/train.py)
-```python
-from ultralytics import YOLO
+### T3.3 — Métricas de negocio
+- [ ] Crear `scripts/business_metrics.py`.
+- [ ] Implementar:
+  - **MAE en €**: por carril (debe medirse solo en verde + ámbar), por tramo de importe.
+  - **% casos en carril verde**: sobre el total y sobre los liquidables.
+  - **Tasa de FN en daño estructural sospechado**: contra ground truth.
+  - **Cohen's weighted kappa**: clasificación de severidad modelo vs perito.
+  - **% estimaciones dentro de ±15% del valor real**.
+  - **Tiempo medio de procesamiento** por siniestro.
+- [ ] Reporte HTML autocontenido en `eval_business/report_{fecha}.html` con tablas, intervalos de confianza (bootstrap), y gráficos.
+- **Tests**: sobre un golden set sintético de 20 casos, todas las métricas se calculan sin error y devuelven valores en rangos esperables.
 
-# ═══════════════════════════════════════════
-# FASE 1: Backbone congelado (warm-up)
-# ═══════════════════════════════════════════
-model = YOLO("yolo11m-seg.pt")
+### T3.4 — Calibración de confianza
+- [ ] Crear `scripts/calibrate_confidence.py`.
+- [ ] Sobre el golden set (o validation si golden no está aún): construir curva de calibración (reliability diagram).
+- [ ] Aplicar isotonic regression o Platt scaling sobre las confianzas de salida del modelo.
+- [ ] Guardar el calibrador como `models/baseline_v1.0/confidence_calibrator.pkl`.
+- [ ] Integrar en `predict.py` (vía opción `--calibrate`) sin reentrenar el modelo.
+- **Tests**: confianzas tras calibrar tienen Brier score menor o igual que sin calibrar sobre validation.
 
-model.train(
-    data="configs/dataset.yaml",
-    epochs=20,
-    imgsz=1024,
-    batch=8,
-    optimizer="AdamW",
-    lr0=0.01,
-    freeze=10,             # Congela las primeras 10 capas (backbone)
-    patience=0,            # No early stopping en fase 1
-    project="runs/damage_seg",
-    name="phase1_frozen"
-)
-
-# ═══════════════════════════════════════════
-# FASE 2: Fine-tuning completo
-# ═══════════════════════════════════════════
-model = YOLO("runs/damage_seg/phase1_frozen/weights/last.pt")
-
-model.train(
-    data="configs/dataset.yaml",
-    epochs=280,
-    imgsz=1024,
-    batch=8,
-    optimizer="AdamW",
-    lr0=0.001,
-    lrf=0.01,
-    dropout=0.1,
-    # Augmentaciones específicas para daños
-    mosaic=1.0,
-    mixup=0.15,
-    copy_paste=0.3,        # Copia daños a otras ubicaciones
-    degrees=15,
-    translate=0.2,
-    scale=0.5,
-    flipud=0.0,            # NO voltear vertical (coches siempre upright)
-    fliplr=0.5,
-    hsv_h=0.015,
-    hsv_s=0.7,
-    hsv_v=0.4,
-    patience=50,           # Early stopping
-    project="runs/damage_seg",
-    name="phase2_finetune"
-)
-```
-
-### Aumentación de datos — Estrategia específica para daños
-
-| Técnica | Valor | Motivo |
-|---|---|---|
-| **Copy-Paste** | 0.3 | Clave: pega daños existentes en otras zonas del vehículo |
-| **Mosaic** | 1.0 | Combina 4 imágenes → más contexto y eficiencia |
-| **MixUp** | 0.15 | Regularización suave para evitar overfitting |
-| **HSV jitter** | h=0.015, s=0.7, v=0.4 | Simula sol/sombra/noche/flash |
-| **Scale** | 0.5 | Robustez ante daños a diferentes distancias |
-| **Flip horizontal** | 0.5 | Vehículos simétricos |
-| **No flip vertical** | 0.0 | Los coches nunca están boca abajo |
-| **Rotación** | ±15° | Ángulos reales de fotografía |
-
-> [!NOTE]
-> **Augmentación avanzada (opcional)**: Se puede complementar con imágenes sintéticas generadas con ControlNet/Stable Diffusion para clases infrarrepresentadas. Esto queda fuera del alcance inicial pero es una opción para mejorar rendimiento.
-
-#### [NEW] [dataset.yaml](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/configs/dataset.yaml)
-```yaml
-path: /Users/borja/Documents/Somniumrema/projects/Comp_vision/data/final
-train: images/train
-val: images/val
-test: images/test
-
-names:
-  0: dent
-  1: scratch
-  2: crack
-  3: broken_light
-```
+### T3.5 — Evaluación de la versión 1.0 contra el golden set
+- [ ] Ejecutar `business_metrics.py` sobre el golden set completo con el modelo `baseline_v1.0`.
+- [ ] Generar `eval_business/baseline_v1.0_report.html`.
+- [ ] Crear `model_cards/v1.0.md` con: dataset de entrenamiento, métricas en validation, métricas en golden set, sesgos detectados (por marca/color/provincia), limitaciones conocidas, fecha.
+- **Criterio de aceptación del Sprint 3**: el reporte de negocio existe, contiene las 6 métricas clave con intervalos de confianza, y la model card está firmada con el hash del `best.pt`.
 
 ---
 
-## Fase 5: Inferencia, Evaluación e Informes
+## SPRINT 4 — Mejora del modelo basada en evidencia (7-10 días)
 
-#### [NEW] [predict.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/predict.py)
-- Inferencia sobre imágenes individuales, directorios o URLs
-- Genera visualizaciones con máscaras coloreadas por tipo de daño:
-  - 🔴 `dent` → rojo
-  - 🟡 `scratch` → amarillo
-  - 🔵 `crack` → azul
-  - 🟣 `broken_light` → morado
-- Exporta resultados en JSON estructurado:
-```json
-{
-  "image": "IMG_001.jpg",
-  "damages": [
-    {"class": "dent", "confidence": 0.92, "area_px": 15420, "area_pct": 2.3,
-     "bbox": [120, 340, 280, 510], "mask_polygon": [[...]]},
-    {"class": "scratch", "confidence": 0.87, "area_px": 3200, "area_pct": 0.5,
-     "bbox": [400, 200, 650, 220], "mask_polygon": [[...]]}
-  ],
-  "total_damage_area_pct": 2.8
-}
-```
+Ahora sí, mejoras del modelo, pero guiadas por las métricas de negocio del Sprint 3.
 
-#### [NEW] [evaluate.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/evaluate.py)
-- Evaluación completa sobre test set:
-  - mAP@50, mAP@50:95 (boxes y masks)
-  - Precision, Recall, F1 por clase
-  - Matriz de confusión
-  - Curvas PR por clase
-- Visualización side-by-side: ground truth vs predicción
-- Análisis de errores: falsos positivos/negativos más frecuentes
+### T4.1 — Augmentaciones específicas de parking
+- [ ] Añadir a `scripts/train.py` (vía flag opcional, no romper la rama actual): augmentaciones con `albumentations` o `imgaug`:
+  - Simulación de reflejos especulares
+  - Simulación de superficie mojada
+  - Sombras duras de pilares
+  - Motion blur leve (foto a pulso)
+- [ ] Configuración en `configs/augmentations_parking.yaml`.
+- [ ] El nuevo entrenamiento va a `models/v1.1/`, NO sustituye `baseline_v1.0`.
+- **Tests**: las augmentaciones se aplican sin romper el pipeline; visualizar 10 ejemplos.
 
-#### [NEW] [generate_report.py](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/scripts/generate_report.py)
-- Genera informe de peritación por imagen (HTML/PDF):
-  - Imagen original + imagen con masks superpuestas
-  - Tabla de daños: tipo, confianza, área estimada, ubicación
-  - Resumen de severidad
-- Formato compatible con flujos de seguros
+### T4.2 — Dataset de alta calidad (curado)
+- [ ] Crear `scripts/curate_dataset.py`.
+- [ ] Generar `data/curated/`: CarDD completo + subset revisado de VehiDE (descartar imágenes con etiquetado pobre, marcadas como "low_quality" manualmente o por heurística).
+- [ ] Entrenar `models/v1.2/` solo sobre `data/curated/`.
+- [ ] Comparar v1.0 vs v1.1 vs v1.2 sobre el golden set.
+- **Criterio**: si v1.2 mejora en métrica primaria (MAE €) sobre v1.0, promoverlo. Si no, documentar por qué y mantener v1.0.
+
+### T4.3 — Clases ampliadas (de 4 a 8-10)
+- [ ] Diseñar nuevo `configs/data_config_v2.yaml` con clases ampliadas: `scratch_superficial`, `scratch_profundo`, `dent_pdr`, `dent_chapa`, `paint_chip`, `crack`, `broken_light`, `bumper_misalignment`, `panel_gap`.
+- [ ] Esta tarea requiere reanotación parcial. Documentar el proceso en `docs/reannotation_protocol.md`.
+- [ ] **Esta es la única tarea del plan que puede llevar 2-4 semanas adicionales**. Decidir con stakeholders si entra en v2.0 o se aplaza.
+
+### T4.4 — Detector de daño preexistente entrenado
+- [ ] Crear `scripts/train_preexisting_detector.py`.
+- [ ] Pequeño clasificador binario (MobileNet o EfficientNet-B0) sobre crops de daños.
+- [ ] Dataset propio (a coordinar con Mutua): 500+ crops etiquetados como "fresco" o "preexistente".
+- [ ] Integrar en `alerts.py` reemplazando el placeholder de T2.4.
+- **Criterio**: F1 ≥ 0.75 sobre validation.
 
 ---
 
-## Estructura del Proyecto
+## SPRINT 5 — Compliance y operación continua (en paralelo, ongoing)
 
-```
-Comp_vision/
-├── configs/
-│   ├── data_config.yaml          # Mapping de clases, splits, filtros
-│   ├── auto_label_config.yaml    # Config Autodistill (prompts, thresholds)
-│   └── dataset.yaml              # Config Ultralytics para training
-├── scripts/
-│   ├── download_datasets.py      # Descarga VehiDE, CarDD, Roboflow, SYNDCAR
-│   ├── unify_to_yolo.py          # COCO → YOLO-seg, splits, estadísticas
-│   ├── auto_label.py             # Autodistill: GroundingDINO + SAM2
-│   ├── prepare_for_review.py     # Exporta para CVAT con priorización
-│   ├── export_reviewed.py        # Importa revisiones, regenera dataset
-│   ├── train.py                  # Entrenamiento 2 fases YOLOv11m-seg
-│   ├── predict.py                # Inferencia + visualización + JSON
-│   ├── evaluate.py               # Métricas completas sobre test set
-│   └── generate_report.py        # Informes de peritación HTML/PDF
-├── data/
-│   ├── raw/                      # Imágenes descargadas sin procesar
-│   │   ├── vehide/
-│   │   ├── cardd/
-│   │   └── roboflow/
-│   ├── unified/                  # COCO unificado (4 clases)
-│   ├── auto_labeled/             # Salida de Autodistill
-│   ├── reviewed/                 # Anotaciones corregidas en CVAT
-│   └── final/                    # Dataset listo para entrenar
-│       ├── images/
-│       │   ├── train/
-│       │   ├── val/
-│       │   └── test/
-│       └── labels/
-│           ├── train/
-│           ├── val/
-│           └── test/
-├── runs/                         # Resultados de entrenamiento (Ultralytics)
-│   └── damage_seg/
-│       ├── phase1_frozen/
-│       └── phase2_finetune/
-├── notebooks/
-│   └── eda.ipynb                 # Exploración del dataset
-├── requirements.txt
-└── README.md
-```
+Tareas que se hacen y se mantienen permanentemente.
+
+### T5.1 — Loop de active learning
+- [ ] Crear `scripts/feedback_collector.py`.
+- [ ] Cada corrección de un perito sobre output del modelo se guarda en `data/feedback/` con timestamp, claim_id, output_modelo, decisión_humana.
+- [ ] Script mensual `scripts/build_retraining_set.py` que añade el feedback al dataset de reentrenamiento.
+
+### T5.2 — Bias testing
+- [ ] Crear `scripts/bias_audit.py`.
+- [ ] Métricas desglosadas por: marca, color (claro/oscuro/metálico), provincia, antigüedad del vehículo, sexo del asegurado si está disponible y es legal.
+- [ ] Reporte mensual en `eval_business/bias_{YYYYMM}.html`.
+
+### T5.3 — Data lineage
+- [ ] Crear y mantener `data_lineage.yaml`: cada dataset, cada modelo, cada métrica reportada al negocio queda con su origen, fecha, hash, persona responsable.
+
+### T5.4 — Documentación final
+- [ ] Crear `docs/SYSTEM_OVERVIEW.md`: arquitectura, flujos, decisiones de diseño.
+- [ ] Crear `docs/OPERATOR_MANUAL.md`: cómo interpretar un output, cuándo escalar a perito, glosario de alertas.
+- [ ] Crear `docs/AUDIT_GUIDE.md`: cómo auditar una decisión histórica del sistema (cruzar logs + model card + datos de entrada).
 
 ---
 
-## Dependencias
+## REGLAS DE TRACKING
 
-#### [NEW] [requirements.txt](file:///Users/borja/Documents/Somniumrema/projects/Comp_vision/requirements.txt)
+Al completar cada tarea, edita el checkbox y añade una línea:
+
 ```
-# Core
-ultralytics>=8.3.0
-torch>=2.1.0
-torchvision>=0.16.0
-
-# Auto-labeling
-autodistill
-autodistill-grounded-sam
-supervision>=0.19.0
-
-# Dataset processing
-pycocotools
-kaggle
-roboflow
-
-# Visualization & reporting
-matplotlib
-seaborn
-Pillow
-opencv-python-headless
-jinja2           # Para informes HTML
-weasyprint       # Para exportar a PDF (opcional)
-
-# Utilities
-pyyaml
-tqdm
-rich             # Pretty CLI output
+- [x] T1.1 — Quality Gate
+      ✓ 2026-06-10 · commit a3f4b9c · 12 tests passing · cobertura módulo 87%
 ```
 
----
+Si una tarea se bloquea, añade nota:
 
-## Comparativa de Arquitecturas Evaluadas
-
-| Modelo | Params | mAP@50 (est.) | Inferencia | Transfer Learning | Complejidad | Veredicto |
-|---|---|---|---|---|---|---|
-| **YOLOv11m-seg** ⭐ | ~10M | Alto | ~30 FPS | 3 líneas de código | Baja | **RECOMENDADO** |
-| YOLOv11s-seg | ~2.6M | Medio-Alto | ~44 FPS | 3 líneas | Baja | Si dataset <2K |
-| YOLOv11x-seg | ~62M | Muy alto | ~15 FPS | 3 líneas | Baja | Si dataset >10K |
-| Detectron2 Mask R-CNN | ~44M | Muy alto | ~5 FPS | Complejo | Alta | Solo si masks perfectas |
-| SAM2 | ~300M | N/A | ~2 FPS | No clasificable | N/A | Solo para anotación |
-
----
-
-## Verification Plan
-
-### Automated Tests
-```bash
-# 1. Verificar descarga y estructura del dataset
-python scripts/download_datasets.py --dry-run
-
-# 2. Verificar unificación y estadísticas
-python scripts/unify_to_yolo.py --stats-only
-
-# 3. Probar auto-etiquetado con 10 imágenes sample
-python scripts/auto_label.py --input data/raw/sample --limit 10
-
-# 4. Validar formato de anotaciones con Ultralytics
-python -c "from ultralytics import YOLO; YOLO('yolo11n-seg.pt').val(data='configs/dataset.yaml')"
-
-# 5. Sanity check de entrenamiento (5 epochs)
-python scripts/train.py --epochs 5 --imgsz 640 --batch 4 --phase1-only
-
-# 6. Entrenamiento completo (2 fases)
-python scripts/train.py
-
-# 7. Evaluación sobre test set
-python scripts/evaluate.py --model runs/damage_seg/phase2_finetune/weights/best.pt
-
-# 8. Generar informe sample
-python scripts/generate_report.py --image data/final/images/test/sample.jpg
+```
+- [ ] T3.1 — Golden set
+      ⏸ BLOQUEADO 2026-06-12: esperando confirmación de Legal sobre anonimización
 ```
 
-### Manual Verification
-- Revisar visualmente 50 predicciones aleatorias del test set
-- Verificar que NO se detectan daños tipo tire/glass (clases excluidas)
-- Confirmar que las masks siguen contornos reales del daño (no rectangulares)
-- Validar informe de peritación generado (formato, contenido, legibilidad)
-- Comparar métricas por clase para identificar clases débiles
+## DEFINICIÓN DE HECHO PARA EL PROYECTO ENTERO
+
+El proyecto está "listo para piloto" cuando:
+1. Sprint 1 + Sprint 2 + Sprint 3 cerrados.
+2. `eval_business/baseline_v1.0_report.html` muestra: MAE € ≤ 150, recall daño visible ≥ 90%, FN estructural ≤ 3%.
+3. Model card v1.0 firmada por el responsable técnico y por Legal.
+4. Existe un plan operativo escrito en `docs/PILOT_PLAN.md` con: alcance del piloto, criterios de éxito, plan de rollback.
+
+El proyecto está "listo para producción" cuando además:
+5. Sprint 4 cerrado con modelo demostrablemente mejor en al menos 2 de las 6 métricas de negocio.
+6. Sprint 5 operativo con al menos 2 meses de feedback acumulado y un reentrenamiento ejecutado con éxito.
+7. Auditoría externa (interna de Mutua o consultora) firmada conforme a AI Act y DORA.

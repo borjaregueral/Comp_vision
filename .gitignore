@@ -17,6 +17,18 @@ data/review_package/
 *.onnx
 *.engine
 
+# ── Estructura operativa (Sprint 0) ──────────────────────────────
+# Golden set: siniestros reales (PII) — NUNCA al repo. Solo la estructura.
+golden_set/*
+!golden_set/.gitkeep
+!golden_set/README.md
+# Logs de auditoría (JSONL) generados en runtime — no versionar contenido.
+logs/*
+!logs/.gitkeep
+# Pesos de modelos entrenados (las model cards y *_metadata.json SÍ se versionan).
+models/*/best.pt
+models/*/last.pt
+
 # ── Python ───────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
