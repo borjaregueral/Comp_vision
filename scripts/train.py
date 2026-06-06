@@ -67,6 +67,7 @@ def train_phase1(
     batch: int,
     device: str,
     project: str,
+    amp: bool = True,
 ) -> Path:
     """Fase 1: Entrena con backbone congelado (warm-up)."""
     from ultralytics import YOLO
@@ -93,6 +94,7 @@ def train_phase1(
         lr0=0.01,
         freeze=10,           # Congelar backbone
         patience=0,          # Sin early stopping en fase 1
+        amp=amp,
         device=device,
         project=project,
         name="phase1_frozen",
@@ -120,6 +122,7 @@ def train_phase2(
     device: str,
     project: str,
     resume: bool = False,
+    amp: bool = True,
 ) -> Path:
     """Fase 2: Fine-tuning completo con augmentaciones."""
     from ultralytics import YOLO
@@ -162,6 +165,7 @@ def train_phase2(
         hsv_v=0.4,
         # ── Control ──
         patience=50,
+        amp=amp,
         device=device,
         project=project,
         name="phase2_finetune",
@@ -234,6 +238,10 @@ def parse_args():
     parser.add_argument("--phase1-only", action="store_true", help="Solo ejecutar fase 1")
     parser.add_argument("--phase2-only", action="store_true", help="Solo ejecutar fase 2")
     parser.add_argument("--resume", action="store_true", help="Reanudar entrenamiento interrumpido")
+    parser.add_argument(
+        "--amp", action=argparse.BooleanOptionalAction, default=True,
+        help="Precisión mixta (AMP). Usa --no-amp si la EMA da NaN/Inf al descongelar (fase 2).",
+    )
     return parser.parse_args()
 
 
@@ -274,6 +282,7 @@ def main():
             batch=args.batch,
             device=device,
             project=args.project,
+            amp=args.amp,
         )
 
     if args.phase1_only:
@@ -302,6 +311,7 @@ def main():
         device=device,
         project=args.project,
         resume=args.resume,
+        amp=args.amp,
     )
 
     # ── Resumen ───────────────────────────────────────────────────
