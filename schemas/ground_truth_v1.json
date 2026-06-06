@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comp-vision.example/schemas/comp_vision/ground_truth_v1.json",
+  "title": "Golden Set Ground Truth v1",
+  "description": "Verdad de referencia (humana) de un siniestro cerrado del golden set. Es la base para medir las métricas de negocio (MAE €, kappa, FN estructural). additionalProperties:false en todos los niveles para impedir estructuralmente la entrada de PII (matrícula, nombre, DNI, dirección).",
+  "type": "object",
+  "required": [
+    "claim_id",
+    "importe_final_pagado",
+    "moneda",
+    "severidad_oficial",
+    "es_estructural",
+    "decision_final"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "claim_id": {
+      "type": "string",
+      "description": "ID interno pseudónimo del siniestro. NO matrícula, NO nombre."
+    },
+    "importe_final_pagado": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Importe REAL finalmente pagado/peritado (€). Es el target del MAE."
+    },
+    "moneda": {
+      "type": "string",
+      "const": "EUR"
+    },
+    "iva_incluido": {
+      "type": "boolean",
+      "description": "Si importe_final_pagado incluye IVA (debe alinearse con la estimación del sistema)."
+    },
+    "severidad_oficial": {
+      "type": "string",
+      "enum": ["leve", "moderado", "severo"],
+      "description": "Severidad asignada por el perito. Se compara con la del sistema (Cohen's kappa)."
+    },
+    "es_estructural": {
+      "type": "boolean",
+      "description": "true si el peritaje confirmó daño estructural. Base de la tasa de FN estructural."
+    },
+    "decision_final": {
+      "type": "string",
+      "enum": [
+        "resuelto_sin_peritaje",
+        "revisado_por_tramitador",
+        "peritaje_presencial",
+        "rechazado"
+      ],
+      "description": "Decisión final humana. Mapeo a carril: resuelto_sin_peritaje↔verde, revisado_por_tramitador↔ámbar, peritaje_presencial↔rojo, rechazado↔fuera de gestión automática."
+    },
+    "fecha_cierre": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de cierre del siniestro (para el filtro de 'último año')."
+    },
+    "piezas": {
+      "type": "array",
+      "description": "Piezas realmente reparadas/sustituidas según el cierre.",
+      "items": {
+        "type": "object",
+        "required": ["part", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "part": {
+            "type": "string",
+            "description": "Familia de pieza (ej: 'front_bumper')."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["repair", "repaint_only", "replace"]
+          },
+          "origen": {
+            "type": "string",
+            "enum": ["oem", "aftermarket"]
+          },
+          "precio_eur": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "horas_reales": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chapa": { "type": "number", "minimum": 0 },
+        "pintura": { "type": "number", "minimum": 0 }
+      }
+    },
+    "vehiculo": {
+      "type": "object",
+      "description": "Datos NO personales del vehículo (para estratificación y bias testing).",
+      "additionalProperties": false,
+      "properties": {
+        "marca": { "type": "string" },
+        "modelo": { "type": "string" },
+        "anio": { "type": "integer", "minimum": 1980, "maximum": 2100 },
+        "color": { "type": "string" },
+        "color_grupo": {
+          "type": "string",
+          "enum": ["claro", "oscuro", "metalizado"],
+          "description": "Agrupación de color para bias testing (T5.2)."
+        },
+        "provincia": { "type": "string" },
+        "valor_estimado": { "type": "number", "minimum": 0 }
+      }
+    },
+    "perito_id": {
+      "type": "string",
+      "description": "ID pseudónimo del perito (para análisis inter-perito). NO nombre real."
+    },
+    "notas": {
+      "type": "string",
+      "description": "Notas libres del cierre. NO incluir PII."
+    }
+  }
+}
