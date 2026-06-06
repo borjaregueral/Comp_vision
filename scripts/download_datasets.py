@@ -17,6 +17,7 @@ Uso:
 import argparse
 import json
 import logging
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -194,20 +195,23 @@ def download_roboflow(output_dir: Path, dry_run: bool = False) -> Path:
     try:
         from roboflow import Roboflow
         console.print("[bold green]⬇ Descargando SInfo desde Roboflow...[/]")
-        console.print(
-            "[yellow]Nota: Necesitas una API key de Roboflow.[/]\n"
-            "Regístrate gratis en https://roboflow.com y obtén tu key."
-        )
 
-        api_key = input("Introduce tu Roboflow API key (o 'skip' para omitir): ").strip()
-        if api_key.lower() == "skip":
-            log.info("Descarga de Roboflow omitida por el usuario")
+        # API key desde el entorno (no interactivo → no bloquea CI/automatización)
+        api_key = os.environ.get("ROBOFLOW_API_KEY", "").strip()
+        if not api_key:
+            log.warning(
+                "ROBOFLOW_API_KEY no definida; se omite la descarga de Roboflow.\n"
+                "Para habilitarla: export ROBOFLOW_API_KEY=<tu_key> "
+                "(regístrate gratis en https://roboflow.com)."
+            )
             return dataset_dir
 
         rf = Roboflow(api_key=api_key)
         project = rf.workspace("sinfo").project("car-damage-segmentation")
-        version = project.version(1)
-        version.download("coco", location=str(dataset_dir))
+        version = project.version(2)
+        # OJO: para proyectos instance-segmentation el formato es
+        # "coco-segmentation" (con "coco" la descarga sale vacía).
+        version.download("coco-segmentation", location=str(dataset_dir))
         log.info("SInfo Roboflow descargado en %s", dataset_dir)
     except ImportError:
         log.error("El paquete 'roboflow' no está instalado. pip install roboflow")

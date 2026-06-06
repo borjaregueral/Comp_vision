@@ -224,6 +224,11 @@ def parse_args():
     parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")
     parser.add_argument("--epochs-phase1", type=int, default=20, help="Epochs fase 1 (default: 20)")
     parser.add_argument("--epochs-phase2", type=int, default=280, help="Epochs fase 2 (default: 280)")
+    parser.add_argument(
+        "--epochs", type=int, default=None,
+        help="Atajo: fija epochs para ambas fases (override de --epochs-phase1/--epochs-phase2). "
+             "Útil para sanity checks, p.ej. --epochs 5 --phase1-only",
+    )
     parser.add_argument("--device", type=str, default="auto", help="Dispositivo (default: auto)")
     parser.add_argument("--project", type=str, default=str(DEFAULT_PROJECT))
     parser.add_argument("--phase1-only", action="store_true", help="Solo ejecutar fase 1")
@@ -234,6 +239,11 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Atajo --epochs: override de los epochs por fase
+    if args.epochs is not None:
+        args.epochs_phase1 = args.epochs
+        args.epochs_phase2 = args.epochs
 
     console.print("\n[bold blue]═══════════════════════════════════════════[/]")
     console.print("[bold blue]  Entrenamiento — Fotoperitación           [/]")
