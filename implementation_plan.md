@@ -45,10 +45,11 @@ Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cam
       ↻ Revisión aplicada 2026-06-06: (#2) resolución orientación-independiente (long/short side) — una vertical 600×800 ya no se rechaza; (#4) `vehicle_area_fraction` por unión de cajas (no suma, ≤1.0) + bbox de unión; (#1) nitidez medida en el ROI del vehículo (`use_vehicle_roi`), con limitación de chapa lisa documentada en YAML/model card. `quality_gate.yaml` → v1.1.0. 16 tests verdes, cobertura 79%.
 
 ### T1.2 — Schema JSON de salida v1
-- [ ] Crear `schemas/inference_output_v1.json` (JSON Schema) con campos: `id_evaluacion`, `timestamp`, `version_modelo`, `quality`, `damages[]`, `zones`, `alerts[]`, `estimacion`, `lane`, `lane_reason`, `next_action`, `audit`.
-- [ ] Crear `scripts/output_builder.py` que tome los outputs intermedios y los emita validados contra el schema.
-- [ ] Si la validación falla, lanzar excepción explícita (no fallar silenciosamente).
+- [x] Crear `schemas/inference_output_v1.json` (JSON Schema) con campos: `id_evaluacion`, `timestamp`, `version_modelo`, `quality`, `damages[]`, `zones`, `alerts[]`, `estimacion`, `lane`, `lane_reason`, `next_action`, `audit`.
+- [x] Crear `scripts/output_builder.py` que tome los outputs intermedios y los emita validados contra el schema.
+- [x] Si la validación falla, lanzar excepción explícita (no fallar silenciosamente).
 - **Tests**: output válido pasa validación; output con campo faltante falla con mensaje claro.
+      ✓ 2026-06-06 · El schema ya existía (commit 61ae209) y cubre todos los campos (nombres en inglés: `model_version`, `zones_summary`); se mantiene como fuente de verdad, sin reescribir. `scripts/output_builder.py`: `build_output()` ensambla el dict canónico (genera `id_evaluacion` `EVA-YYYYMMDD-XXXXXXXX` y `timestamp` UTC RFC3339; lee `schema_version` del propio schema), valida con `jsonschema` Draft 2020-12 (+FormatChecker) y lanza `OutputValidationError` (subclase de `ValueError`) listando cada ruta fallida. `tests/test_output_builder.py`: 10 tests (válido, id/timestamp, campo faltante top-level y anidado, enum `lane`, patrón `lane_rule_id`, `additionalProperties`, skip-validate), todos verdes; cobertura módulo 92%. (commit pendiente)
 
 ### T1.3 — Triaje determinista (verde/ámbar/rojo)
 - [ ] Crear `scripts/triage.py` y `business_rules/lane_rules.yaml`.
