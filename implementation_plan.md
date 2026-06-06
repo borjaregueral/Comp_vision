@@ -64,10 +64,11 @@ Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cam
       ✓ 2026-06-06 · `lane_rules.yaml` ya existía (61ae209) y se mantiene como fuente de verdad. **Decisión de diseño**: umbrales/IDs/orden/`reason_template` en YAML; predicados deterministas en `triage.py` enlazados por ID de regla (sin `eval` de las cadenas `condition` del YAML → seguridad + auditabilidad, reglas 10/15). `assign_lane` evalúa ROJO (en orden) → VERDE (todas las condiciones) → AMBAR (resto, con `missing_criteria` en el motivo). `estimacion` ausente se maneja sin romper (→ ámbar). `tests/test_triage.py`: 16 tests (ROJO-1..6 incl. additional_condition de ROJO-6, VERDE-1, AMBAR-1, bordes 800/1500/0.85, precedencia rojo>verde, estimación ausente, contrato lane/rule_id), todos verdes; cobertura módulo 94% (lo no cubierto = ramas defensivas: archivo inexistente, fallbacks de formato, guard de ID desconocido). Suite completa 47/47.
 
 ### T1.4 — Logging estructurado de auditoría
-- [ ] Crear `scripts/audit_log.py`.
-- [ ] Cada inferencia genera línea JSONL en `logs/inference_{YYYYMMDD}.jsonl` con: timestamp, input_hash (SHA256 de la imagen), model_version, output_summary (lane + total_eur + n_damages), rule_id_applied, processing_time_ms.
-- [ ] Rotación diaria. No PII en los logs (sin matrícula, sin nombre).
+- [x] Crear `scripts/audit_log.py`.
+- [x] Cada inferencia genera línea JSONL en `logs/inference_{YYYYMMDD}.jsonl` con: timestamp, input_hash (SHA256 de la imagen), model_version, output_summary (lane + total_eur + n_damages), rule_id_applied, processing_time_ms.
+- [x] Rotación diaria. No PII en los logs (sin matrícula, sin nombre).
 - **Tests**: una inferencia genera exactamente una línea JSONL parseable; hash es determinista.
+      ✓ 2026-06-06 · `scripts/audit_log.py`: `hash_image`/`hash_bytes` (SHA256 determinista), `build_record` puro y **PII-safe por diseño** (solo claves whitelisted, sin vía para metadata libre), `log_inference` (1 línea JSONL/eval) y `log_from_output` (extrae del output validado de T1.2 — lo usará T1.5). Rotación diaria por fecha DERIVADA del timestamp del registro (testeable). Config en `configs/audit_log.yaml` (`log_dir`+`filename_pattern`, sin rutas hardcoded). `tests/test_audit_log.py`: 8 tests (hash determinista==hashlib, archivo inexistente, 1 línea parseable, append mismo día, rotación entre días, claves⊆whitelist, sin tokens PII, mapeo de `log_from_output`), todos verdes; cobertura módulo 94%. Suite completa 55/55.
 
 ### T1.5 — Orquestador principal (`assess_claim.py`)
 - [ ] Crear `scripts/assess_claim.py` como punto de entrada operativo único.
