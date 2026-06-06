@@ -1,0 +1,83 @@
+# ============================================
+# Localización de Daños por Zona del Vehículo
+# ============================================
+# Un 2º modelo YOLOv11-seg entrenado sobre el dataset Ultralytics `carparts-seg`
+# (23 clases, con partes diferenciadas por lado) segmenta las partes del coche.
+# Cada daño se asigna a la zona de la parte con la que más solapa.
+
+# Modelo de partes entrenado (lo genera scripts/train_parts.py)
+parts_model: runs/parts_seg/train/weights/best.pt
+
+# Dataset de entrenamiento (Ultralytics lo descarga solo)
+parts_dataset: carparts-seg.yaml
+
+# --- Las 6 zonas objetivo ---
+zones:
+  - front
+  - rear
+  - front_left
+  - front_right
+  - rear_left
+  - rear_right
+
+# Zonas con lado definido (esquinas). El resto (front/rear) son centrales.
+side_specific_zones:
+  - front_left
+  - front_right
+  - rear_left
+  - rear_right
+
+# --- Mapping parte (carparts-seg, 23 clases) → zona ---
+# null = parte ambigua o irrelevante (no aporta zona).
+part_to_zone:
+  # Frontal centro
+  front_bumper: front
+  hood: front
+  front_glass: front
+  front_light: front          # genérico sin lado → side_uncertain
+  front_door: front           # genérico sin lado → side_uncertain
+  # Frontal izquierda (lado conductor en LHD)
+  front_left_door: front_left
+  front_left_light: front_left
+  left_mirror: front_left     # los retrovisores van en las puertas delanteras
+  # Frontal derecha
+  front_right_door: front_right
+  front_right_light: front_right
+  right_mirror: front_right
+  # Trasera centro
+  back_bumper: rear
+  trunk: rear
+  tailgate: rear
+  back_glass: rear
+  back_light: rear            # genérico sin lado → side_uncertain
+  back_door: rear             # genérico sin lado → side_uncertain
+  # Trasera izquierda
+  back_left_door: rear_left
+  back_left_light: rear_left
+  # Trasera derecha
+  back_right_door: rear_right
+  back_right_light: rear_right
+  # Ambiguas (no asignan zona por sí solas)
+  wheel: null                 # esquina indeterminada
+  object: null                # clase basura del dataset
+
+# Partes que dan front/rear pero NO lado → se marca side_uncertain=true.
+side_agnostic_parts:
+  - front_light
+  - front_door
+  - back_light
+  - back_door
+
+# --- Parámetros de asignación ---
+assignment:
+  # Confianza mínima de detección de una parte para considerarla
+  parts_conf: 0.25
+  parts_imgsz: 640
+  # Fracción mínima de la máscara del daño que debe caer dentro de una parte
+  min_overlap: 0.10
+  # Peso de especificidad: una parte de esquina (lado conocido) gana a una
+  # central aunque solape algo menos. score = overlap * weight
+  side_specific_weight: 1.0
+  center_weight: 0.7
+  # Zona cuando ninguna parte supera min_overlap
+  fallback_zone: unknown
