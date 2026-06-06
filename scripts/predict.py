@@ -142,16 +142,13 @@ def run_inference(
     total_area = sum(d["area_pct"] for d in damages)
     damage_types = list(set(d["class"] for d in damages))
 
-    # Severidad
-    if total_area < 2:
-        severity = "Leve"
-        severity_en = "Minor"
-    elif total_area < 10:
-        severity = "Moderado"
-        severity_en = "Moderate"
-    else:
-        severity = "Severo"
-        severity_en = "Severe"
+    # Severidad PRELIMINAR (solo visual, por % de área en la imagen). Sustituye
+    # los antiguos magic numbers; umbrales en business_rules/severity_matrix.yaml.
+    # NO es la severidad económica autoritativa: esa la calcula scripts/severity.py
+    # (compute_severity) en el pipeline, por pieza + zona + coste.
+    from severity import preliminary_visual_severity
+    severity = preliminary_visual_severity(total_area)
+    severity_en = {"Leve": "Minor", "Moderado": "Moderate", "Severo": "Severe"}[severity]
 
     report = {
         "image": image_path.name,
