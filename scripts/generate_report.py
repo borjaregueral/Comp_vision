@@ -74,20 +74,37 @@ def generate_html_report(
         "crack": "#4488FF", "broken_light": "#AA44FF",
     }
 
+    # Etiquetas de zona (es) para el informe
+    zone_labels = {
+        "front": "Frontal", "rear": "Trasera",
+        "front_left": "Frontal izq.", "front_right": "Frontal der.",
+        "rear_left": "Trasera izq.", "rear_right": "Trasera der.",
+        "unknown": "—",
+    }
+
     for i, d in enumerate(damages, 1):
         color = class_colors.get(d["class"], "#888")
         conf_color = "#2ecc71" if d["confidence"] > 0.7 else ("#f39c12" if d["confidence"] > 0.4 else "#e74c3c")
+        # Celda de zona (solo si se localizó con el modelo de partes)
+        if "zone" in d:
+            zlabel = zone_labels.get(d["zone"], d["zone"])
+            if d.get("side_uncertain") and d["zone"] not in ("unknown",):
+                zlabel += ' <span style="color:#f39c12" title="lado no determinado con certeza">⚠</span>'
+            zone_cell = f"<td>{zlabel}</td>"
+        else:
+            zone_cell = "<td>—</td>"
         damage_rows += f"""
         <tr>
             <td>{i}</td>
             <td><span class="damage-badge" style="background:{color}">{d['class_es']}</span></td>
+            {zone_cell}
             <td><span style="color:{conf_color};font-weight:bold">{d['confidence']:.1%}</span></td>
             <td>{d['area_px']:,} px</td>
             <td>{d['area_pct']:.2f}%</td>
         </tr>"""
 
     if not damage_rows:
-        damage_rows = '<tr><td colspan="5" style="text-align:center;color:#999;">Sin daños detectados</td></tr>'
+        damage_rows = '<tr><td colspan="6" style="text-align:center;color:#999;">Sin daños detectados</td></tr>'
 
     # Badges de tipos de daño
     type_badges = ""
@@ -403,6 +420,7 @@ def generate_html_report(
                     <tr>
                         <th>#</th>
                         <th>Tipo de Daño</th>
+                        <th>Ubicación</th>
                         <th>Confianza</th>
                         <th>Área</th>
                         <th>% Superficie</th>
@@ -441,6 +459,10 @@ def parse_args():
         "--model", type=str,
         default=str(PROJECT_ROOT / "runs" / "damage_seg" / "phase2_finetune" / "weights" / "best.pt"),
     )
+    parser.add_argument("--parts-model", type=str, default=None,
+                        help="Modelo de partes (.pt) para localizar el daño por zona "
+                             "(front/rear/front_left/...). Si se omite, no se localiza.")
+    parser.add_argument("--parts-config", type=Path, default=PROJECT_ROOT / "configs" / "parts_config.yaml")
     parser.add_argument("--output", type=Path, default=PROJECT_ROOT / "reports")
     parser.add_argument("--title", type=str, default="Informe de Peritación")
     parser.add_argument("--conf", type=float, default=0.25)
@@ -472,6 +494,18 @@ def main():
         log.error("No se encontraron imágenes en: %s", args.source)
         sys.exit(1)
 
+    # Localización por zona (opcional): carga el modelo de partes si se indicó
+    parts_model = None
+    parts_cfg = None
+    if args.parts_model:
+        import localize
+        if not Path(args.parts_model).exists():
+            log.error("Modelo de partes no encontrado: %s", args.parts_model)
+            sys.exit(1)
+        parts_cfg = localize.load_parts_config(args.parts_config)
+        parts_model = YOLO(args.parts_model)
+        console.print(f"  Localización por zona: [green]activada[/] ({args.parts_model})")
+
     args.output.mkdir(parents=True, exist_ok=True)
     generated = 0
 
@@ -480,6 +514,10 @@ def main():
 
         # Inferencia
         report = run_inference(model, img_path, args.conf, imgsz=args.imgsz)
+
+        # Localización por zona (si hay modelo de partes)
+        if parts_model is not None:
+            report = localize.enrich_report_with_zones(report, img_path, parts_model, parts_cfg)
 
         # Imágenes
         original_b64 = image_to_base64(image_path=img_path)
