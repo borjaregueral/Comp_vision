@@ -1,0 +1,250 @@
+# ============================================================================
+# piezas.yaml — Catálogo de precios de piezas (top 20 siniestrables)
+# ============================================================================
+# IMPORTANTE: PRECIOS PLACEHOLDER orientativos basados en rangos públicos
+# (recambios online, catálogos OEM 2024-2025). Sustituir por:
+#   1. Catálogo de la aseguradora si lo hay.
+#   2. Conexión a API de proveedor (Audatex, GT Motive, DAT Iberia).
+#   3. Negociación con red de recambistas.
+#
+# Estructura por nivel:
+#   marca → modelo → (familia_pieza, año_rango) → { oem_eur, aftermarket_eur, tech, notes }
+#
+# Si una pieza no está catalogada → el estimador genera alerta y deriva a ámbar.
+# ============================================================================
+
+version: "0.1.0-PLACEHOLDER"
+effective_date: "2026-06-06"
+status: "DRAFT — sustituir por catálogo real (Audatex / GT Motive / propio)"
+currency: EUR
+iva_included: false              # Precios SIN IVA; el estimador añade IVA al total
+
+# ── Catálogo de piezas frecuentes en parking ───────────────────────────────
+# Marcas elegidas: top 6 del parque español (DGT 2024-2025).
+# Modelos: el más vendido de cada marca en último quinquenio.
+
+catalog:
+
+  # ═════════════════════════════════════════════════════════════════════════
+  SEAT:
+    Ibiza:
+      front_bumper:
+        year_range: [2017, 2025]
+        oem_eur: 320
+        aftermarket_eur: 180
+        tech: standard
+        paint_required: true     # Viene en imprimación, requiere pintura
+      back_bumper:
+        year_range: [2017, 2025]
+        oem_eur: 290
+        aftermarket_eur: 160
+        tech: standard
+        paint_required: true
+      front_left_door:
+        year_range: [2017, 2025]
+        oem_eur: 580
+        aftermarket_eur: null    # Puertas rara vez en aftermarket
+        tech: standard
+      front_right_door:
+        year_range: [2017, 2025]
+        oem_eur: 580
+        aftermarket_eur: null
+        tech: standard
+      front_left_light:
+        year_range: [2017, 2025]
+        oem_eur: 240
+        aftermarket_eur: 130
+        tech: halogen            # Faros LED en versiones FR/Xcellence: ver below
+      front_right_light:
+        year_range: [2017, 2025]
+        oem_eur: 240
+        aftermarket_eur: 130
+        tech: halogen
+      front_left_light_led:      # Variante LED (versiones altas)
+        year_range: [2020, 2025]
+        oem_eur: 680
+        aftermarket_eur: null
+        tech: led
+      left_mirror:
+        year_range: [2017, 2025]
+        oem_eur: 180
+        aftermarket_eur: 95
+        tech: electric           # Eléctrico + térmico
+
+    Leon:
+      front_bumper:
+        year_range: [2020, 2025]
+        oem_eur: 380
+        aftermarket_eur: 220
+        tech: standard
+        paint_required: true
+      back_bumper:
+        year_range: [2020, 2025]
+        oem_eur: 340
+        aftermarket_eur: 195
+        tech: standard
+        paint_required: true
+      front_left_light:
+        year_range: [2020, 2025]
+        oem_eur: 420
+        aftermarket_eur: null
+        tech: led                # Leon 2020+ es LED de serie
+
+  # ═════════════════════════════════════════════════════════════════════════
+  Renault:
+    Clio:
+      front_bumper:
+        year_range: [2019, 2025]
+        oem_eur: 310
+        aftermarket_eur: 175
+        tech: standard
+        paint_required: true
+      back_bumper:
+        year_range: [2019, 2025]
+        oem_eur: 280
+        aftermarket_eur: 155
+        tech: standard
+        paint_required: true
+      front_left_light:
+        year_range: [2019, 2025]
+        oem_eur: 380
+        aftermarket_eur: null
+        tech: led
+      front_right_light:
+        year_range: [2019, 2025]
+        oem_eur: 380
+        aftermarket_eur: null
+        tech: led
+      left_mirror:
+        year_range: [2019, 2025]
+        oem_eur: 170
+        aftermarket_eur: 88
+        tech: electric
+
+  # ═════════════════════════════════════════════════════════════════════════
+  Peugeot:
+    "208":
+      front_bumper:
+        year_range: [2019, 2025]
+        oem_eur: 350
+        aftermarket_eur: 195
+        tech: standard
+        paint_required: true
+      back_bumper:
+        year_range: [2019, 2025]
+        oem_eur: 310
+        aftermarket_eur: 175
+        tech: standard
+        paint_required: true
+      front_left_light:
+        year_range: [2019, 2025]
+        oem_eur: 450
+        aftermarket_eur: null
+        tech: led                # 208 II llevó full-LED de serie
+
+  # ═════════════════════════════════════════════════════════════════════════
+  Volkswagen:
+    Golf:
+      front_bumper:
+        year_range: [2020, 2025]
+        oem_eur: 480
+        aftermarket_eur: 280
+        tech: standard
+        paint_required: true
+      back_bumper:
+        year_range: [2020, 2025]
+        oem_eur: 420
+        aftermarket_eur: 245
+        tech: standard
+        paint_required: true
+      front_left_light:
+        year_range: [2020, 2025]
+        oem_eur: 720
+        aftermarket_eur: null
+        tech: led
+      front_left_light_matrix:   # Golf R-Line / GTI con IQ.Light Matrix
+        year_range: [2020, 2025]
+        oem_eur: 1450
+        aftermarket_eur: null
+        tech: matrix             # Aviso: severo automático
+
+    Polo:
+      front_bumper:
+        year_range: [2018, 2025]
+        oem_eur: 340
+        aftermarket_eur: 195
+        tech: standard
+        paint_required: true
+
+  # ═════════════════════════════════════════════════════════════════════════
+  Toyota:
+    Corolla:
+      front_bumper:
+        year_range: [2019, 2025]
+        oem_eur: 410
+        aftermarket_eur: 235
+        tech: standard
+        paint_required: true
+      front_left_light:
+        year_range: [2019, 2025]
+        oem_eur: 520
+        aftermarket_eur: null
+        tech: led
+    Yaris:
+      front_bumper:
+        year_range: [2020, 2025]
+        oem_eur: 330
+        aftermarket_eur: 185
+        tech: standard
+        paint_required: true
+
+  # ═════════════════════════════════════════════════════════════════════════
+  Ford:
+    Fiesta:
+      front_bumper:
+        year_range: [2017, 2023]
+        oem_eur: 320
+        aftermarket_eur: 180
+        tech: standard
+        paint_required: true
+    Focus:
+      front_bumper:
+        year_range: [2018, 2025]
+        oem_eur: 380
+        aftermarket_eur: 215
+        tech: standard
+        paint_required: true
+
+# ── Política de selección OEM vs aftermarket ───────────────────────────────
+# Reglas que el estimador aplica al elegir precio:
+selection_policy:
+  default: aftermarket            # Por defecto, aftermarket si disponible
+  use_oem_if:
+    - "vehicle_age_years <= 3"   # Vehículos nuevos: OEM por garantía
+    - "vehicle_value > 30000"    # Vehículos premium
+    - "part.tech in ['xenon', 'led', 'matrix']"   # Faros tech: solo OEM
+    - "part.aftermarket_eur is null"               # Pieza sin alternativa
+
+# ── Piezas no catalogadas ──────────────────────────────────────────────────
+# Si el modelo detecta sustitución necesaria en una combinación marca-modelo-
+# pieza-año no listada, el estimador:
+#   1. Genera alerta de tipo "warning" con id "parts_lookup_missing".
+#   2. Aplica un precio orientativo por defecto desde fallback_prices.
+#   3. Marca el caso como ámbar (no puede ir a verde sin precio fiable).
+fallback_prices:
+  front_bumper: 400
+  back_bumper: 360
+  front_left_door: 600
+  front_right_door: 600
+  back_left_door: 560
+  back_right_door: 560
+  front_left_light: 350
+  front_right_light: 350
+  back_left_light: 200
+  back_right_light: 200
+  left_mirror: 175
+  right_mirror: 175
+  hood: 480
+  trunk: 450
+  tailgate: 520
+  wheel: 280

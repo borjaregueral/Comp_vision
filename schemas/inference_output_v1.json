@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comp-vision.example/schemas/comp_vision/inference_output_v1.json",
+  "title": "Inference Output v1",
+  "description": "Schema canónico de salida del sistema de fotoperitación de daños de aparcamiento. Validado por scripts/output_builder.py antes de emitirse a sistemas downstream.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id_evaluacion",
+    "timestamp",
+    "model_version",
+    "claim_id",
+    "quality",
+    "damages",
+    "alerts",
+    "estimacion",
+    "lane",
+    "lane_rule_id",
+    "lane_reason",
+    "next_action",
+    "audit"
+  ],
+  "additionalProperties": false,
+  "properties": {
+
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Versión del schema. Sirve para versionado downstream."
+    },
+
+    "id_evaluacion": {
+      "type": "string",
+      "pattern": "^EVA-[0-9]{8}-[A-F0-9]{8}$",
+      "description": "ID único de esta evaluación. Formato: EVA-YYYYMMDD-XXXXXXXX (hex)."
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC del momento de la evaluación."
+    },
+
+    "model_version": {
+      "type": "object",
+      "required": ["damage_model", "parts_model"],
+      "properties": {
+        "damage_model": {
+          "type": "string",
+          "description": "Identificador del modelo de daños (ej: 'baseline_v1.0')."
+        },
+        "damage_model_hash": {
+          "type": "string",
+          "description": "SHA256 del .pt del modelo de daños."
+        },
+        "parts_model": {
+          "type": "string",
+          "description": "Identificador del modelo de partes (ej: 'parts_seg_v1.0')."
+        },
+        "parts_model_hash": {
+          "type": "string"
+        },
+        "calibrator_version": {
+          "type": ["string", "null"],
+          "description": "Versión del calibrador de confianza aplicado (null si no aplicado)."
+        }
+      }
+    },
+
+    "claim_id": {
+      "type": "string",
+      "description": "ID del siniestro en el sistema de tramitación. NO incluir matrícula ni datos personales."
+    },
+
+    "quality": {
+      "type": "object",
+      "required": ["valid", "per_image"],
+      "properties": {
+        "valid": {
+          "type": "boolean",
+          "description": "true si al menos una imagen pasa el quality gate; false si TODAS fallan."
+        },
+        "per_image": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["image_hash", "valid", "problems"],
+            "properties": {
+              "image_hash": { "type": "string" },
+              "valid": { "type": "boolean" },
+              "problems": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "scores": {
+                "type": "object",
+                "properties": {
+                  "sharpness": { "type": "number" },
+                  "exposure_high_pct": { "type": "number" },
+                  "exposure_low_pct": { "type": "number" },
+                  "mean_brightness": { "type": "number" },
+                  "vehicle_detected": { "type": "boolean" },
+                  "vehicle_area_fraction": { "type": "number" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "damages": {
+      "type": "array",
+      "description": "Daños consolidados tras agregación multi-vista. NO es la suma cruda de detecciones por imagen.",
+      "items": {
+        "type": "object",
+        "required": [
+          "damage_id",
+          "type",
+          "zone",
+          "part",
+          "extension",
+          "severity",
+          "confidence",
+          "supporting_images"
+        ],
+        "properties": {
+          "damage_id": {
+            "type": "string",
+            "description": "ID estable del daño consolidado dentro de esta evaluación."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["dent", "scratch", "crack", "broken_light"]
+          },
+          "zone": {
+            "type": "string",
+            "enum": ["front", "rear", "front_left", "front_right", "rear_left", "rear_right", "unknown"]
+          },
+          "part": {
+            "type": "string",
+            "description": "Parte específica del vehículo (ej: 'front_bumper', 'front_left_door')."
+          },
+          "part_category": {
+            "type": "string",
+            "enum": ["plastic_panel", "body_panel", "light_assembly", "mirror", "glass", "wheel", "unknown"]
+          },
+          "extension": {
+            "type": "string",
+            "enum": ["small", "medium", "large"]
+          },
+          "extension_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Área del daño / área de la pieza detectada."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["leve", "moderado", "severo"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confianza calibrada del daño (no la raw del detector)."
+          },
+          "confidence_raw": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confianza cruda antes de calibración. Conservada para auditoría."
+          },
+          "structural_suspicion": {
+            "type": "boolean",
+            "description": "true si hay indicios de daño que afecte a estructura del vehículo."
+          },
+          "supporting_images": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Hashes de las imágenes que respaldan este daño consolidado."
+          },
+          "repair_decision": {
+            "type": "string",
+            "enum": ["repair", "repaint_only", "replace"]
+          },
+          "estimated_hours": {
+            "type": "object",
+            "properties": {
+              "chapa": { "type": "number", "minimum": 0 },
+              "pintura": { "type": "number", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+
+    "zones_summary": {
+      "type": "object",
+      "description": "Recuento de daños por zona del vehículo.",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "description"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID estable de la alerta (ej: 'preexisting_damage_suspected', 'part_declaration_mismatch')."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "critical"]
+          },
+          "description": {
+            "type": "string",
+            "description": "Descripción legible para humano."
+          },
+          "evidence": {
+            "type": "object",
+            "description": "Datos que respaldan la alerta (campos libres según tipo)."
+          }
+        }
+      }
+    },
+
+    "estimacion": {
+      "type": "object",
+      "required": ["total_eur", "p25_eur", "p75_eur", "breakdown", "confidence_overall", "currency", "iva_included"],
+      "properties": {
+        "total_eur": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Punto medio de la estimación. Para liquidar conservador, usar p75_eur."
+        },
+        "p25_eur": { "type": "number", "minimum": 0 },
+        "p75_eur": { "type": "number", "minimum": 0 },
+        "breakdown": {
+          "type": "object",
+          "required": ["mano_obra", "piezas", "materiales", "iva"],
+          "properties": {
+            "mano_obra": { "type": "number", "minimum": 0 },
+            "piezas": { "type": "number", "minimum": 0 },
+            "materiales": { "type": "number", "minimum": 0 },
+            "iva": { "type": "number", "minimum": 0 }
+          }
+        },
+        "confidence_overall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confianza global de la estimación. Reducida si hay piezas no catalogadas o severidades inciertas."
+        },
+        "currency": {
+          "type": "string",
+          "const": "EUR"
+        },
+        "iva_included": {
+          "type": "boolean"
+        },
+        "province_used": {
+          "type": "string",
+          "description": "Provincia cuya tarifa se aplicó (o 'default' si no estaba mapeada)."
+        },
+        "parts_lookup_missing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Piezas que se tuvieron que estimar con fallback por no estar en catálogo."
+        }
+      }
+    },
+
+    "lane": {
+      "type": "string",
+      "enum": ["verde", "ambar", "rojo"]
+    },
+
+    "lane_rule_id": {
+      "type": "string",
+      "pattern": "^(VERDE|AMBAR|ROJO)-[0-9]+$",
+      "description": "ID de la regla aplicada (definido en business_rules/lane_rules.yaml)."
+    },
+
+    "lane_reason": {
+      "type": "string",
+      "description": "Justificación legible del carril asignado, generada desde el template de la regla."
+    },
+
+    "next_action": {
+      "type": "string",
+      "description": "Acción operativa concreta a seguir (ej: 'Liquidar automáticamente y notificar al asegurado', 'Asignar a tramitador para revisión rápida', 'Programar peritaje presencial')."
+    },
+
+    "audit": {
+      "type": "object",
+      "required": ["input_hashes", "processing_time_ms"],
+      "properties": {
+        "input_hashes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "SHA256 de las imágenes de entrada. Permite trazar la decisión a las imágenes exactas."
+        },
+        "processing_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pipeline_version": {
+          "type": "string",
+          "description": "Versión del orquestador assess_claim.py."
+        },
+        "rules_versions": {
+          "type": "object",
+          "properties": {
+            "lane_rules": { "type": "string" },
+            "severity_matrix": { "type": "string" },
+            "baremo_horas": { "type": "string" },
+            "precios_taller": { "type": "string" },
+            "piezas": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
