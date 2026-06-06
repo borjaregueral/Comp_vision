@@ -740,12 +740,33 @@ def merge_coco_datasets(datasets: list[dict]) -> dict:
     return merged
 
 
+def is_valid_image(path: Path) -> bool:
+    """Comprueba la integridad de una imagen forzando su decodificación completa.
+
+    PIL es perezoso: ``Image.open`` solo lee la cabecera (suficiente para .size),
+    pero NO detecta JPEGs truncados o con el stream roto. ``load()`` fuerza la
+    decodificación de todos los píxeles y lanza excepción si el archivo está
+    corrupto/truncado — el mismo fallo que luego descartaría Ultralytics.
+    """
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            im.load()
+        return True
+    except Exception:
+        return False
+
+
 def copy_images_to_unified(
     coco_data: dict,
     source_dirs: list[Path],
     output_dir: Path,
 ) -> dict:
-    """Copia las imágenes referenciadas al directorio unificado y actualiza rutas."""
+    """Copia las imágenes referenciadas al directorio unificado y actualiza rutas.
+
+    Verifica la integridad de cada imagen (decodificación completa) y descarta
+    las corruptas/truncadas; sus anotaciones se eliminan como huérfanas.
+    """
     images_dir = output_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
 
@@ -757,6 +778,7 @@ def copy_images_to_unified(
 
     copied = 0
     missing = 0
+    corrupt = 0
     updated_images = []
 
     with Progress(
@@ -766,13 +788,19 @@ def copy_images_to_unified(
         TaskProgressColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("Copiando imágenes...", total=len(coco_data["images"]))
+        task = progress.add_task("Copiando + verificando imágenes...", total=len(coco_data["images"]))
 
         for img_info in coco_data["images"]:
             filename = Path(img_info.get("file_name", "")).name
             src_path = available.get(filename)
 
             if src_path and src_path.exists():
+                # Filtro de integridad: descartar corruptas/truncadas
+                if not is_valid_image(src_path):
+                    corrupt += 1
+                    log.debug("Imagen corrupta/truncada (omitida): %s", filename)
+                    progress.advance(task)
+                    continue
                 dst_path = images_dir / filename
                 if not dst_path.exists():
                     shutil.copy2(src_path, dst_path)
@@ -787,14 +815,14 @@ def copy_images_to_unified(
 
     coco_data["images"] = updated_images
 
-    # Filtrar anotaciones huérfanas
+    # Filtrar anotaciones huérfanas (incluye las de imágenes corruptas descartadas)
     valid_img_ids = {img["id"] for img in updated_images}
     coco_data["annotations"] = [
         ann for ann in coco_data["annotations"]
         if ann["image_id"] in valid_img_ids
     ]
 
-    log.info("Imágenes copiadas: %d, no encontradas: %d", copied, missing)
+    log.info("Imágenes copiadas: %d, corruptas: %d, no encontradas: %d", copied, corrupt, missing)
     return coco_data
 
 
