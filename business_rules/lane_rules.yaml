@@ -13,9 +13,22 @@
 # marcar la antigua como deprecated.
 # ============================================================================
 
-version: "1.0.0"
+version: "1.1.0"
 effective_date: "2026-06-06"
 owner: "Equipo Mutua — Tramitación de daños propios"
+# Changelog:
+#   1.1.0 (2026-06-06): añadida sección `next_actions` (texto operativo por carril,
+#                       consumido por scripts/assess_claim.py). Sin cambios en
+#                       umbrales ni en las reglas de decisión.
+#   1.0.0 (2026-06-06): versión inicial.
+
+# ── Acción operativa por carril ─────────────────────────────────────────────
+# Texto legible que el orquestador escribe en `next_action`. No hardcoded en
+# código (regla 7). El carril lo decide el triaje; esto solo mapea carril→acción.
+next_actions:
+  verde: "Liquidar automáticamente y notificar al asegurado."
+  ambar: "Asignar a tramitador para revisión rápida en pantalla."
+  rojo: "Programar peritaje presencial obligatorio."
 
 # ── Umbrales económicos (en €) ─────────────────────────────────────────────
 # Anclas que aparecen en las reglas. Centralizados para revisión rápida.

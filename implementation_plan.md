@@ -71,11 +71,14 @@ Aquí transformas el detector en un sistema con triaje. No cambia el modelo, cam
       ✓ 2026-06-06 · `scripts/audit_log.py`: `hash_image`/`hash_bytes` (SHA256 determinista), `build_record` puro y **PII-safe por diseño** (solo claves whitelisted, sin vía para metadata libre), `log_inference` (1 línea JSONL/eval) y `log_from_output` (extrae del output validado de T1.2 — lo usará T1.5). Rotación diaria por fecha DERIVADA del timestamp del registro (testeable). Config en `configs/audit_log.yaml` (`log_dir`+`filename_pattern`, sin rutas hardcoded). `tests/test_audit_log.py`: 8 tests (hash determinista==hashlib, archivo inexistente, 1 línea parseable, append mismo día, rotación entre días, claves⊆whitelist, sin tokens PII, mapeo de `log_from_output`), todos verdes; cobertura módulo 94%. Suite completa 55/55.
 
 ### T1.5 — Orquestador principal (`assess_claim.py`)
-- [ ] Crear `scripts/assess_claim.py` como punto de entrada operativo único.
-- [ ] Flujo: cargar imágenes → quality gate por imagen → inferencia daños + zonas → agregación (placeholder hasta T2.5) → triaje → audit log → emitir JSON validado.
-- [ ] CLI: `python scripts/assess_claim.py --claim-id X --images dir/ --metadata file.json`.
+- [x] Crear `scripts/assess_claim.py` como punto de entrada operativo único.
+- [x] Flujo: cargar imágenes → quality gate por imagen → inferencia daños + zonas → agregación (placeholder hasta T2.5) → triaje → audit log → emitir JSON validado.
+- [x] CLI: `python scripts/assess_claim.py --claim-id X --images dir/ --metadata file.json`.
 - **Tests**: ejecuta sobre 3 imágenes mock + metadata mock y produce JSON válido contra el schema; deja entrada en audit log.
 - **Criterio de aceptación del Sprint 1**: `python scripts/assess_claim.py` corre end-to-end sobre un caso sintético y produce output válido + log. Ningún test falla.
+      ✓ 2026-06-06 · `scripts/assess_claim.py` encadena hash→quality_gate→inferencia(daños solo en imágenes válidas)→agregación(placeholder T2.5)→estimación(placeholder T2.2, ceros+conf 0 → nunca verde)→triaje(T1.3)→`build_output`(T1.2)→audit JSONL(T1.4). Componentes **inyectables** (damage_detector, vehicle_detector, estimator) → pipeline end-to-end **offline**; defaults de producción cargan modelos reales y **fallan con mensaje claro si falta `best.pt`** (verificado por CLI: "fetch best.pt from the remote GPU run (T0.1)"). `next_action` por carril en `lane_rules.yaml` v1.1.0 (no hardcoded). `tests/test_assess_claim.py`: 9 tests (3 imágenes→output válido+1 línea audit; sin imágenes válidas→ámbar; lista vacía→error; estructural→rojo ROJO-1; input_hashes==hash de ficheros; detector sin pesos→FileNotFoundError; find_images), todos verdes; cobertura módulo 73% (resto = CLI + carga real YOLO). Suite completa 64/64.
+
+> **SPRINT 1 CERRADO** (2026-06-06): T1.1–T1.5 ✅. Capa de orquestación operativa funcionando end-to-end sobre caso sintético, con triaje determinista, salida validada por schema y auditoría JSONL. Pendiente real: ejecutar con `best.pt` cuando llegue de la GPU remota (T0.1 ⏸) y sustituir placeholders de coste/severidad/agregación en Sprint 2.
 
 ---
 
