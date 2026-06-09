@@ -34,23 +34,38 @@ console = Console()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-CLASS_NAMES = {0: "dent", 1: "scratch", 2: "crack", 3: "broken_light"}
-CLASS_NAMES_ES = {0: "Abolladura", 1: "Arañazo", 2: "Grieta", 3: "Faro/Piloto roto"}
+# Las clases reales las define el modelo (result.names), que refleja el
+# dataset con el que se entrenó (4 clases v1 o 6 clases v2). Estos mapas se
+# indexan por NOMBRE de clase (no por id) para ser agnósticos a la taxonomía.
+CLASS_ES = {
+    "scratch": "Arañazo",
+    "dent": "Abolladura",
+    "crack": "Grieta",
+    "paint_chip": "Desconchón",
+    "puncture": "Perforación",
+    "broken_light": "Faro/Piloto roto",
+}
 
-# Colores BGR para OpenCV
+# Colores BGR (OpenCV) por nombre de clase
 CLASS_COLORS_BGR = {
-    0: (68, 68, 255),      # Rojo (dent)
-    1: (0, 215, 255),      # Amarillo (scratch)
-    2: (255, 136, 68),     # Azul (crack)
-    3: (255, 68, 170),     # Morado (broken_light)
+    "scratch": (0, 215, 255),       # Amarillo
+    "dent": (68, 68, 255),          # Rojo
+    "crack": (255, 136, 68),        # Azul
+    "paint_chip": (0, 165, 255),    # Naranja
+    "puncture": (128, 0, 128),      # Púrpura oscuro
+    "broken_light": (255, 68, 170), # Morado
 }
 
 CLASS_COLORS_HEX = {
-    0: "#FF4444",
-    1: "#FFD700",
-    2: "#4488FF",
-    3: "#AA44FF",
+    "scratch": "#FFD700",
+    "dent": "#FF4444",
+    "crack": "#4488FF",
+    "paint_chip": "#FFA500",
+    "puncture": "#800080",
+    "broken_light": "#AA44FF",
 }
+
+_DEFAULT_BGR = (128, 128, 128)
 
 
 def find_images(source: Path) -> list[Path]:
@@ -129,9 +144,11 @@ def run_inference(
                 approx = cv2.approxPolyDP(largest, epsilon, True)
                 polygon = approx.reshape(-1, 2).tolist()
 
+            # Nombre de clase desde el propio modelo (agnóstico a la taxonomía)
+            cname = result.names.get(class_id, str(class_id)) if hasattr(result, "names") else str(class_id)
             damages.append({
-                "class": CLASS_NAMES.get(class_id, "unknown"),
-                "class_es": CLASS_NAMES_ES.get(class_id, "Desconocido"),
+                "class": cname,
+                "class_es": CLASS_ES.get(cname, cname),
                 "class_id": class_id,
                 "confidence": round(confidence, 4),
                 "area_px": area_px,
@@ -192,10 +209,9 @@ def draw_visualization(
     overlay = image.copy()
 
     for damage in report["damages"]:
-        class_id = damage["class_id"]
-        color = CLASS_COLORS_BGR.get(class_id, (128, 128, 128))
-        confidence = damage["confidence"]
         class_name = damage["class"]
+        color = CLASS_COLORS_BGR.get(class_name, _DEFAULT_BGR)
+        confidence = damage["confidence"]
 
         # Dibujar polígono relleno
         polygon = damage.get("mask_polygon", [])
@@ -220,10 +236,10 @@ def draw_visualization(
     # Blend masks
     result = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
 
-    # Leyenda
+    # Leyenda: solo las clases presentes en este informe
     legend_y = 30
-    for cid, cname in CLASS_NAMES.items():
-        color = CLASS_COLORS_BGR[cid]
+    for cname in sorted({d["class"] for d in report["damages"]}):
+        color = CLASS_COLORS_BGR.get(cname, _DEFAULT_BGR)
         cv2.rectangle(result, (10, legend_y - 15), (30, legend_y), color, -1)
         cv2.putText(
             result, cname, (35, legend_y - 2),

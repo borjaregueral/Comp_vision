@@ -26,6 +26,17 @@ ontology:
     confidence_threshold: 0.35
     color: [170, 68, 255]      # Morado
 
+  # Taxonomía v2 (6 clases)
+  paint_chip:
+    prompts: "chipped car paint . paint chip on car body . flaking paint . stone chip on bodywork . missing paint spot"
+    confidence_threshold: 0.30  # sutiles, como los scratches
+    color: [255, 165, 0]       # Naranja
+
+  puncture:
+    prompts: "puncture hole in car panel . hole punched through car body . perforation in bodywork . pierced car panel"
+    confidence_threshold: 0.35
+    color: [128, 0, 128]       # Púrpura
+
 # --- Parámetros de GroundingDINO ---
 grounding_dino:
   box_threshold: 0.30

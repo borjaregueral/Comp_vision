@@ -1,0 +1,11 @@
+path: /Users/borja/Documents/Somniumrema/projects/Comp_vision/data/final_v2
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: scratch
+  1: dent
+  2: crack
+  3: paint_chip
+  4: puncture
+  5: broken_light

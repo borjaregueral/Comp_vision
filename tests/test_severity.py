@@ -109,3 +109,20 @@ def test_preliminary_visual_severity_thresholds():
     assert sv.preliminary_visual_severity(1.0) == "Leve"
     assert sv.preliminary_visual_severity(5.0) == "Moderado"
     assert sv.preliminary_visual_severity(15.0) == "Severo"
+
+
+# ── Taxonomía v2: paint_chip y puncture ───────────────────────────────
+
+def test_paint_chip_is_cosmetic():
+    # Desconchón pequeño en chapa = pintura puntual → leve, catalogado.
+    out = sv.compute_severity(_damage(part_category="body_panel", dtype="paint_chip", extension="small"))
+    assert out["severity"] == "leve"
+    assert out["catalogued"] is True
+
+
+def test_puncture_in_body_panel_is_structural_severo():
+    # Perforación en chapa = daño estructural sospechado → severo + ESC-2 (carril rojo).
+    out = sv.compute_severity(_damage(part_category="body_panel", dtype="puncture", extension="medium"))
+    assert out["severity"] == "severo"
+    assert out["structural_suspicion"] is True
+    assert "ESC-2" in out["escalations"]

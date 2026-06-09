@@ -18,7 +18,7 @@ import yaml
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "inference_output_v1.json"
 
-_DAMAGE_TYPES = {"scratch", "dent", "crack", "broken", "any"}
+_DAMAGE_TYPES = {"scratch", "dent", "crack", "broken", "paint_chip", "puncture", "any"}
 _EXTENSIONS = {"small", "medium", "large", "any"}
 _DECISIONS = {"repair", "repaint_only", "replace"}
 _REQUIRED_BRANDS = {"SEAT", "Renault", "Peugeot", "Volkswagen", "Toyota", "Ford"}

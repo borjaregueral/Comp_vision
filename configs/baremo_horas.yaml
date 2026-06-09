@@ -21,9 +21,11 @@
 #         + materiales_pintura (15% de la mano de pintura por convención)
 # ============================================================================
 
-version: "0.1.0-PLACEHOLDER"
-effective_date: "2026-06-06"
+version: "0.2.0-PLACEHOLDER"
+effective_date: "2026-06-09"
 status: "DRAFT — sustituir por baremo oficial antes de uso productivo"
+# 0.2.0 (2026-06-09): taxonomía v2 — añadidos tipos `paint_chip` (pintura puntual)
+#                     y `puncture` (perforación → replace). Horas PLACEHOLDER.
 
 # ── Baremo por categoría de pieza ──────────────────────────────────────────
 
@@ -44,6 +46,14 @@ baremo:
       large:  { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
     broken:
       any:    { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
+    paint_chip:                                                      # PLACEHOLDER v2
+      small:  { chapa_h: 0.0, pintura_h: 0.5, decision: repaint_only }
+      medium: { chapa_h: 0.0, pintura_h: 1.0, decision: repaint_only }
+      large:  { chapa_h: 0.3, pintura_h: 2.0, decision: repaint_only }
+    puncture:                                                        # PLACEHOLDER v2
+      small:  { chapa_h: 1.0, pintura_h: 2.0, decision: repair }
+      medium: { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
+      large:  { chapa_h: 0.5, pintura_h: 2.5, decision: replace }
 
   body_panel:
     scratch:
@@ -58,6 +68,12 @@ baremo:
       any:    { chapa_h: 3.0, pintura_h: 3.0, decision: repair }    # soldadura/refuerzo
     broken:
       any:    { chapa_h: 2.0, pintura_h: 3.0, decision: replace }
+    paint_chip:                                                      # PLACEHOLDER v2
+      small:  { chapa_h: 0.0, pintura_h: 0.6, decision: repaint_only }
+      medium: { chapa_h: 0.0, pintura_h: 1.2, decision: repaint_only }
+      large:  { chapa_h: 0.3, pintura_h: 2.0, decision: repaint_only }
+    puncture:                                                        # PLACEHOLDER v2
+      any:    { chapa_h: 3.0, pintura_h: 3.0, decision: replace }    # soldadura/sustitución
 
   light_assembly:
     scratch:
@@ -70,6 +86,10 @@ baremo:
       any:    { chapa_h: 0.8, pintura_h: 0.0, decision: replace }
     broken:
       any:    { chapa_h: 0.8, pintura_h: 0.0, decision: replace }
+    paint_chip:                                                      # PLACEHOLDER v2
+      any:    { chapa_h: 0.0, pintura_h: 0.0, decision: repair }     # pulido/retoque óptico
+    puncture:                                                        # PLACEHOLDER v2
+      any:    { chapa_h: 0.8, pintura_h: 0.0, decision: replace }
 
   mirror:
     scratch:
@@ -79,6 +99,10 @@ baremo:
     crack:
       any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }   # carcasa o cristal
     broken:
+      any:    { chapa_h: 0.5, pintura_h: 0.5, decision: replace }
+    paint_chip:                                                      # PLACEHOLDER v2
+      any:    { chapa_h: 0.0, pintura_h: 0.3, decision: repaint_only }
+    puncture:                                                        # PLACEHOLDER v2
       any:    { chapa_h: 0.5, pintura_h: 0.5, decision: replace }
 
   wheel:
@@ -90,6 +114,10 @@ baremo:
       any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }
     broken:
       any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }
+    paint_chip:                                                      # PLACEHOLDER v2
+      any:    { chapa_h: 0.5, pintura_h: 0.5, decision: repair }     # retoque bordillazo
+    puncture:                                                        # PLACEHOLDER v2
+      any:    { chapa_h: 0.5, pintura_h: 0.0, decision: replace }    # seguridad → sustituir
 
   unknown:
     # Si no se identifica pieza, ir conservador para evitar infravalorar

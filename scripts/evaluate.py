@@ -38,13 +38,22 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA = PROJECT_ROOT / "configs" / "dataset.yaml"
 DEFAULT_MODEL = PROJECT_ROOT / "runs" / "damage_seg" / "phase2_finetune" / "weights" / "best.pt"
 
+# Defaults (v1 4-clases); en main() se SOBREESCRIBEN con model.names para ser
+# agnósticos a la taxonomía (4 clases v1 o 6 clases v2 o la que sea).
 CLASS_NAMES = {0: "dent", 1: "scratch", 2: "crack", 3: "broken_light"}
-CLASS_COLORS_BGR = {
-    0: (68, 68, 255),      # Rojo
-    1: (0, 215, 255),      # Amarillo
-    2: (255, 136, 68),     # Azul
-    3: (255, 68, 170),     # Morado
-}
+
+# Paleta BGR ciclable para cualquier nº de clases
+_PALETTE_BGR = [
+    (68, 68, 255), (0, 215, 255), (255, 136, 68), (0, 165, 255),
+    (128, 0, 128), (255, 68, 170), (0, 200, 0), (200, 200, 0),
+]
+
+
+def _build_colors(class_names: dict) -> dict:
+    return {cid: _PALETTE_BGR[i % len(_PALETTE_BGR)] for i, cid in enumerate(sorted(class_names))}
+
+
+CLASS_COLORS_BGR = _build_colors(CLASS_NAMES)
 
 
 def run_validation(model, data_yaml: str, device: str = "auto") -> dict:
@@ -294,6 +303,15 @@ def main():
         sys.exit(1)
 
     model = YOLO(args.model)
+
+    # Taxonomía agnóstica: las clases salen del propio modelo (v1 4-cls / v2 6-cls)
+    global CLASS_NAMES, CLASS_COLORS_BGR
+    if getattr(model, "names", None):
+        CLASS_NAMES = {int(k): v for k, v in model.names.items()}
+        CLASS_COLORS_BGR = _build_colors(CLASS_NAMES)
+        log.info("Clases del modelo (%d): %s", len(CLASS_NAMES),
+                 ", ".join(CLASS_NAMES[c] for c in sorted(CLASS_NAMES)))
+
     args.output.mkdir(parents=True, exist_ok=True)
 
     # Validación

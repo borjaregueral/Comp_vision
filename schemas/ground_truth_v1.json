@@ -116,7 +116,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["dent", "scratch", "crack", "broken_light"]
+        "enum": ["dent", "scratch", "crack", "broken_light", "paint_chip", "puncture"]
       },
       "description": "Tipos de daño presentes según el peritaje (para estadísticas y estratificación)."
     },
