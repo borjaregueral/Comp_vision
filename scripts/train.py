@@ -102,13 +102,17 @@ def train_phase1(
         verbose=True,
     )
 
-    weights_dir = Path(project) / "phase1_frozen" / "weights"
-    last_pt = weights_dir / "last.pt"
+    # Ruta REAL donde Ultralytics guardó (no la reconstruida): con project
+    # relativo Ultralytics puede anidar bajo runs/segment/... y la reconstrucción
+    # falla → el handoff fase1→fase2 se rompe en silencio. trainer.save_dir es la
+    # fuente de verdad.
+    save_dir = Path(getattr(model.trainer, "save_dir", Path(project) / "phase1_frozen"))
+    last_pt = save_dir / "weights" / "last.pt"
 
     if last_pt.exists():
         console.print(f"\n[green]✅ Fase 1 completada: {last_pt}[/]")
     else:
-        console.print(f"[yellow]⚠ Weights en: {weights_dir}[/]")
+        console.print(f"[yellow]⚠ Weights en: {save_dir / 'weights'}[/]")
 
     return last_pt
 
@@ -174,34 +178,30 @@ def train_phase2(
         verbose=True,
     )
 
-    weights_dir = Path(project) / "phase2_finetune" / "weights"
-    best_pt = weights_dir / "best.pt"
+    save_dir = Path(getattr(model.trainer, "save_dir", Path(project) / "phase2_finetune"))
+    best_pt = save_dir / "weights" / "best.pt"
 
     if best_pt.exists():
         console.print(f"\n[green]✅ Fase 2 completada: {best_pt}[/]")
     else:
-        console.print(f"[yellow]⚠ Weights en: {weights_dir}[/]")
+        console.print(f"[yellow]⚠ Weights en: {save_dir / 'weights'}[/]")
 
     return best_pt
 
 
-def print_training_summary(project_dir: Path):
-    """Imprime resumen del entrenamiento."""
+def print_training_summary(entries: "list[tuple[str, Path | None]]"):
+    """Resumen a partir de las rutas REALES de cada fase (trainer.save_dir)."""
     table = Table(title="📋 Resumen de Entrenamiento")
     table.add_column("Fase", style="cyan")
-    table.add_column("Directorio")
-    table.add_column("Best model")
+    table.add_column("Weights")
     table.add_column("Estado", style="green")
 
-    for phase_name in ["phase1_frozen", "phase2_finetune"]:
-        phase_dir = project_dir / phase_name
-        best_pt = phase_dir / "weights" / "best.pt"
-        status = "✅ OK" if best_pt.exists() else "❌ No encontrado"
+    for phase_name, wpath in entries:
+        ok = wpath is not None and wpath.exists()
         table.add_row(
             phase_name,
-            str(phase_dir),
-            str(best_pt) if best_pt.exists() else "—",
-            status,
+            str(wpath) if wpath else "—",
+            "✅ OK" if ok else "❌ No encontrado",
         )
 
     console.print()
@@ -286,7 +286,7 @@ def main():
         )
 
     if args.phase1_only:
-        print_training_summary(Path(args.project))
+        print_training_summary([("phase1_frozen", phase1_weights)])
         console.print("\n[yellow]--phase1-only: Fase 2 omitida.[/]\n")
         return
 
@@ -315,7 +315,11 @@ def main():
     )
 
     # ── Resumen ───────────────────────────────────────────────────
-    print_training_summary(Path(args.project))
+    summary_entries: "list[tuple[str, Path | None]]" = []
+    if not args.phase2_only:
+        summary_entries.append(("phase1_frozen", phase1_weights))
+    summary_entries.append(("phase2_finetune", best_model))
+    print_training_summary(summary_entries)
 
     console.print(f"\n[bold green]✅ Entrenamiento completado[/]")
     console.print(f"   Mejor modelo: {best_model}")
