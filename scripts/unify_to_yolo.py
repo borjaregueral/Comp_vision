@@ -330,6 +330,26 @@ def compute_statistics(
         console.print(f"     {classes[cid]:15s} {bar} {pct:5.1f}% ({count:,})")
 
 
+def filter_by_confidence(coco_data: dict, min_conf: float) -> dict:
+    """Descarta anotaciones por debajo de `min_conf` (campo `fine_conf` que
+    escribe auto_relabel; las anotaciones sin el campo se tratan como conf=1.0).
+    Las imágenes que se quedan SIN ninguna anotación se descartan también: no se
+    usan como negativo porque contienen daño que no supimos tipar con confianza.
+    """
+    if min_conf <= 0:
+        return coco_data
+    anns = coco_data["annotations"]
+    kept = [a for a in anns if a.get("fine_conf", 1.0) >= min_conf]
+    keep_img_ids = {a["image_id"] for a in kept}
+    imgs = [im for im in coco_data["images"] if im["id"] in keep_img_ids]
+    log.info("  Filtro conf≥%.2f: anns %d→%d · imágenes %d→%d",
+             min_conf, len(anns), len(kept), len(coco_data["images"]), len(imgs))
+    out = dict(coco_data)
+    out["annotations"] = kept
+    out["images"] = imgs
+    return out
+
+
 def generate_dataset_yaml(
     output_dir: Path,
     config: dict,
@@ -380,6 +400,16 @@ def parse_args() -> argparse.Namespace:
         help="Seed para reproducibilidad de splits (default: 42)",
     )
     parser.add_argument(
+        "--min-conf", type=float, default=0.0,
+        help="Piso de confianza (campo fine_conf de auto_relabel). Anns por debajo "
+             "se descartan; imágenes que quedan sin anns también. Default 0.0 (sin filtro).",
+    )
+    parser.add_argument(
+        "--dataset-yaml", type=Path, default=None,
+        help="Ruta del dataset.yaml a generar (default: configs/dataset.yaml). "
+             "Usa otra ruta (p.ej. configs/dataset_v2.yaml) para no pisar la v1.",
+    )
+    parser.add_argument(
         "--verbose", "-v", action="store_true",
     )
     return parser.parse_args()
@@ -409,6 +439,10 @@ def main():
 
     log.info("Cargado: %d imágenes, %d anotaciones",
              len(coco_data["images"]), len(coco_data["annotations"]))
+
+    # Filtro de confianza (auto_relabel) — quita el ruido de la banda baja
+    min_conf = args.min_conf or float(config.get("train_filter", {}).get("min_conf", 0.0))
+    coco_data = filter_by_confidence(coco_data, min_conf)
 
     # Convertir a YOLO
     console.rule("[bold]Conversión COCO → YOLO Segmentación[/]")
@@ -454,7 +488,7 @@ def main():
             txt_file.unlink()
 
     # Generar dataset.yaml
-    yaml_path = PROJECT_ROOT / "configs" / "dataset.yaml"
+    yaml_path = args.dataset_yaml or (PROJECT_ROOT / "configs" / "dataset.yaml")
     generate_dataset_yaml(args.output, config, yaml_path)
 
     console.print(f"\n[bold green]✅ Dataset YOLO listo en: {args.output}[/]")

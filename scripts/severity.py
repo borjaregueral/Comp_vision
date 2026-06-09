@@ -138,9 +138,9 @@ def compute_severity(damage: dict, cost_estimate: Optional[dict] = None,
         final = "severo"
         escalations.append("ESC-3")
 
-    # Bodywork crack = suspected structural damage (matrix comment) → red lane.
+    # Bodywork crack/puncture = suspected structural damage (matrix) → red lane.
     dkey = _DAMAGE_TYPE_TO_MATRIX.get(dtype, dtype)
-    if category == "body_panel" and dkey == "crack":
+    if category == "body_panel" and dkey in ("crack", "puncture"):
         structural = True
         final = "severo"
         escalations.append("ESC-2")

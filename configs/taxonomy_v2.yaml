@@ -1,0 +1,94 @@
+# ============================================================================
+# Taxonomía v2 — 6 clases (pragmática), por AUTO-ETIQUETADO + revisión humana
+# ============================================================================
+# Las clases v1 (dent/scratch/crack/broken_light) NO distinguen sub-tipos: esa
+# granularidad no existe en ninguna etiqueta de origen. Se CREA re-etiquetando
+# los crops que ya tenemos (mismas fotos), con un clasificador zero-shot (CLIP)
+# y revisión por muestreo. Genera `data/unified_v2/annotations.json`, que
+# `unify_to_yolo.py --input data/unified_v2 --min-conf 0.55` convierte a YOLO-seg.
+#
+# Decisión (2026-06-09, tras revisar el spot-check): el split rayón
+# superficial/profundo era el más confuso para CLIP (conf 0.4–0.6) → SE FUSIONA
+# en un único `scratch`. Se mantienen las ganancias limpias: `puncture` (rescatado
+# de la clase dent), `paint_chip`, y los 20k boxes de Roboflow recuperados.
+#
+# Principio de CALIDAD: la etiqueta gruesa (v1) RESTRINGE las candidatas finas.
+# CLIP solo decide lo ambiguo (scratch vs paint_chip, dent vs puncture) y tipa los
+# boxes de Roboflow ("Damage", sin tipo). 1 candidata → asignación directa.
+version: 2.1.0-AUTOLABEL-6CLS
+
+# --- Clases finas destino (ids 0..5) ---
+classes:
+  0: scratch         # rayón / arañazo (cualquier profundidad)
+  1: dent            # abolladura/deformación de chapa
+  2: crack           # grieta/rotura de plástico (paragolpes, embellecedor)
+  3: paint_chip      # saltado/desconchón de pintura (impacto puntual)
+  4: puncture        # perforación / agujero pasante en el panel
+  5: broken_light    # faro/piloto roto o agrietado
+
+# --- Mapeo clase-gruesa (v1 / origen) → candidatas finas ---
+# 1 candidata  → asignación directa (method=direct, conf=1.0).
+# >1 candidata → se recorta el crop y CLIP elige entre ESAS candidatas.
+coarse_to_fine:
+  dent:         [dent, puncture]
+  scratch:      [scratch, paint_chip]
+  crack:        [crack]
+  broken_light: [broken_light]
+  # Roboflow mono-clase "Damage" (localizado pero SIN tipo) → todas las finas
+  Damage:       [scratch, dent, crack, paint_chip, puncture, broken_light]
+
+# --- Prompts de texto para el clasificador zero-shot (CLIP) ---
+clip_prompts:
+  scratch:
+    - "a scratch or scuff on a car body panel"
+    - "scratched car paint, a linear mark on the bodywork"
+  dent:
+    - "a dent or deformation on a car body panel with intact paint"
+    - "a bent or pushed-in metal panel on a car"
+  crack:
+    - "a crack in a car bumper or plastic part"
+    - "a cracked plastic panel on a vehicle"
+  paint_chip:
+    - "small chips of paint missing from a car body"
+    - "paint chipping or flaking off a car panel"
+  puncture:
+    - "a puncture hole or perforation through a car panel"
+    - "a hole punched through a car body part"
+  broken_light:
+    - "a broken or shattered car headlight or tail light"
+    - "a cracked vehicle lamp cover"
+
+# --- Clasificador zero-shot ---
+classifier:
+  backend: clip                          # CLIP vía transformers (HF) — local, sin API key
+  model_id: openai/clip-vit-base-patch32 # se descarga 1 vez (~600MB) desde HF Hub
+  batch_size: 64
+  crop_padding: 0.15                     # margen alrededor del bbox (fracción del lado mayor)
+  min_crop_px: 16                        # crops menores → baja confianza forzada
+  review_threshold: 0.55                 # softmax sobre candidatas < umbral → needs_review
+
+# --- Filtro al generar el set de ENTRENAMIENTO (unify_to_yolo --min-conf) ---
+# Las etiquetas por debajo de este piso se descartan (el ruido vive en la banda
+# baja). Las imágenes que se quedan sin ninguna etiqueta se descartan también
+# (no se usan como negativo: contienen daño que no supimos tipar).
+train_filter:
+  min_conf: 0.55
+
+# --- Fuentes de anotaciones a re-etiquetar ---
+sources:
+  - name: unified_v1                     # CarDD + VehiDE, ya con tipo grueso
+    type: coco
+    annotations: data/unified/annotations.json
+    images_dir: data/unified/images
+  - name: roboflow                       # mono-clase "Damage", hoy descartado
+    type: coco_glob
+    annotations_glob: data/raw/roboflow/*/_annotations.coco.json
+    file_prefix: rf_                     # evita colisiones de nombre con unified
+
+# --- Salida ---
+output:
+  dir: data/unified_v2
+  link_images: true                      # symlinks (rápido, sin duplicar 33k imágenes)
+  meta_file: relabel_meta.json           # resumen + distribución + needs_review
+  report_file: relabel_spotcheck.html    # parrilla de muestreo para revisión visual
+  report_samples_per_class: 24

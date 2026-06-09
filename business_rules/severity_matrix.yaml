@@ -14,9 +14,14 @@
 # extension: small | medium | large (por área relativa a la pieza, no a la imagen)
 # ============================================================================
 
-version: "1.1.0"
-effective_date: "2026-06-06"
+version: "1.2.0"
+effective_date: "2026-06-09"
 # Changelog:
+#   1.2.0 (2026-06-09): taxonomía v2 (6 clases). Añadidos los tipos de daño
+#                       `paint_chip` y `puncture` en cada categoría de pieza.
+#                       VALORES PLACEHOLDER (marcados): paint_chip≈pintura puntual
+#                       (leve), puncture≈perforación (severo/estructural). Revisar
+#                       con baremo oficial antes de uso productivo.
 #   1.1.0 (2026-06-06): añadidos cost_severity_thresholds (componente económica
 #                       de compute_severity) y preliminary_visual_thresholds (flag
 #                       preliminar de predict.py standalone). Matriz sin cambios.
@@ -78,6 +83,14 @@ severity:
       large: severo       # Sustitución obligatoria
     broken:               # Pieza rota/desprendida
       any: severo
+    paint_chip:           # PLACEHOLDER (v2): desconchón, pintura puntual
+      small: leve
+      medium: leve
+      large: moderado
+    puncture:             # PLACEHOLDER (v2): perforación pasante en plástico
+      small: moderado
+      medium: severo
+      large: severo
 
   body_panel:
     scratch:
@@ -91,6 +104,12 @@ severity:
     crack:                # Fisura en chapa = daño estructural sospechado
       any: severo
     broken:
+      any: severo
+    paint_chip:           # PLACEHOLDER (v2): desconchón en chapa, pintura puntual
+      small: leve
+      medium: leve
+      large: moderado
+    puncture:             # PLACEHOLDER (v2): agujero en chapa = estructural sospechado
       any: severo
 
   light_assembly:
@@ -106,6 +125,10 @@ severity:
       any: severo
     broken:
       any: severo
+    paint_chip:           # PLACEHOLDER (v2): desconchón en óptica/carcasa
+      any: leve
+    puncture:             # PLACEHOLDER (v2): faro perforado → sustitución
+      any: severo
 
   mirror:
     scratch:
@@ -116,6 +139,10 @@ severity:
       any: moderado
     broken:
       any: moderado       # Retrovisor completo 80-400€ según marca
+    paint_chip:           # PLACEHOLDER (v2)
+      any: leve
+    puncture:             # PLACEHOLDER (v2): carcasa perforada → sustitución
+      any: moderado
 
   glass:
     # En scope solo para registrar; no se evalúan glass shatters en este sistema.
@@ -131,6 +158,10 @@ severity:
     crack:
       any: severo         # Llanta agrietada = sustitución por seguridad
     broken:
+      any: severo
+    paint_chip:           # PLACEHOLDER (v2): bordillazo cosmético
+      any: leve
+    puncture:             # PLACEHOLDER (v2): llanta perforada → seguridad
       any: severo
 
   unknown:

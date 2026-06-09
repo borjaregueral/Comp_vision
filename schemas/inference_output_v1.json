@@ -131,7 +131,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["dent", "scratch", "crack", "broken_light"]
+            "enum": ["dent", "scratch", "crack", "broken_light", "paint_chip", "puncture"]
           },
           "zone": {
             "type": "string",

@@ -224,10 +224,70 @@ Ahora sí, mejoras del modelo, pero guiadas por las métricas de negocio del Spr
 - [ ] Comparar v1.0 vs v1.1 vs v1.2 sobre el golden set.
 - **Criterio**: si v1.2 mejora en métrica primaria (MAE €) sobre v1.0, promoverlo. Si no, documentar por qué y mantener v1.0.
 
-### T4.3 — Clases ampliadas (de 4 a 8-10)
-- [ ] Diseñar nuevo `configs/data_config_v2.yaml` con clases ampliadas: `scratch_superficial`, `scratch_profundo`, `dent_pdr`, `dent_chapa`, `paint_chip`, `crack`, `broken_light`, `bumper_misalignment`, `panel_gap`.
-- [ ] Esta tarea requiere reanotación parcial. Documentar el proceso en `docs/reannotation_protocol.md`.
-- [ ] **Esta es la única tarea del plan que puede llevar 2-4 semanas adicionales**. Decidir con stakeholders si entra en v2.0 o se aplaza.
+### T4.3 — Clases ampliadas (de 4 a 6) por re-etiquetado de las fotos existentes
+> **Decisión (2026-06-09, aprobada por el usuario)**: NO hay fotos nuevas. La
+> granularidad de sub-tipo NO existe en ninguna etiqueta de origen (CarDD/VehiDE
+> etiquetan "Scratch" sin distinguir superficial/profundo; Roboflow es mono-clase
+> "Damage"). Por tanto la granularidad se **CREA re-etiquetando los crops que ya
+> tenemos** (auto-label zero-shot + revisión por muestreo), no remapeando. Se
+> descarta la lista de 8-10 clases: `dent_pdr/dent_chapa` y `panel_gap/
+> bumper_misalignment` no son fiables desde un solo crop → quedan fuera.
+- [x] `scripts/auto_relabel.py`: re-etiqueta con CLIP zero-shot (`transformers`,
+  local, sin API). **La etiqueta gruesa v1 restringe las candidatas finas** →
+  CLIP solo decide lo ambiguo (scratch→{scratch,paint_chip}, dent→{dent,puncture})
+  y tipa los **20.082 boxes de Roboflow** ("Damage", antes descartados al 100%).
+  1 candidata → asignación directa (cero ruido). Salida: `data/unified_v2/`
+  (COCO + segmentación intacta + `fine_conf`/`fine_method`/`needs_review` por
+  anotación), symlinks de imágenes, y `relabel_spotcheck.html`.
+- [x] **Spot-check revisado por el usuario (2026-06-09)** → decisiones: el split
+  rayón superficial/profundo era el más confuso (conf 0.4–0.6) → **FUSIONADO** en
+  un único `scratch`. Taxonomía final **6 clases** en `configs/taxonomy_v2.yaml`:
+  `scratch, dent, crack, paint_chip, puncture, broken_light` (v2.1.0). Con la fusión,
+  `needs_review` cayó de 40% → 29% (scratch med. conf 0.75).
+- [x] **Piso de confianza 0.55** (`unify_to_yolo.py --min-conf`, lee
+  `train_filter.min_conf`): descarta el ruido de la banda baja y las imágenes que
+  quedan sin etiqueta (no se usan como negativo). `data/final_v2/` + `dataset_v2.yaml`
+  generados **en paralelo** (v1 intacto): 39.724 anns (vs 36.063 v1, +recuperado
+  Roboflow), 17.498 imgs, splits 12.246/3.497/1.755. crack 90% / dent 75% / scratch
+  68% sobreviven el piso; paint_chip (5.7%) y puncture (4.6%) son minoritarias.
+      ✓ Wiring aguas abajo en T4.3b. **Pendiente (RunPod)**: reentrenar `models/v1.2`
+      con `dataset_v2.yaml`; NO sustituye `baseline_v1.0` (se compara en golden set).
+
+### T4.3b — Cablear la taxonomía v2 (6 clases) aguas abajo
+- [x] **predict.py / evaluate.py agnósticos a la taxonomía**: los nombres de clase
+  salen del propio modelo (`result.names` / `model.names`), no de ids hardcoded.
+  Mapas ES y colores re-indexados POR NOMBRE → funcionan con v1 (4-cls) y v2 (6-cls).
+- [x] **Tipos nuevos `paint_chip` y `puncture`** añadidos a `severity_matrix.yaml`
+  (v1.2.0) y `baremo_horas.yaml` (v0.2.0) en cada categoría de pieza, con VALORES
+  PLACEHOLDER marcados (paint_chip≈pintura puntual/leve; puncture≈perforación/replace).
+  `severity.py`: ESC-2 ahora trata `puncture` en chapa como estructural (→ rojo).
+- [x] **Enums de tipo de daño** extendidos (aditivo, no rompe v1) en
+  `inference_output_v1.json` y `ground_truth_v1.json`; prompts en `auto_label_config.yaml`.
+- [x] **Tests**: suite 159/159 verde (+2 nuevos: paint_chip cosmético, puncture
+  body_panel→severo+estructural). pyright limpio en los 4 scripts tocados.
+      ✓ 2026-06-09 · No hizo falta `inference_output_v2.json`: añadir valores al enum
+      es compatible hacia atrás. PENDIENTE de negocio: sustituir las horas/severidad
+      PLACEHOLDER de paint_chip/puncture por el baremo oficial.
+- **Pendiente (acción del usuario en RunPod)**: reentrenar con `dataset_v2.yaml`
+  (`train.py --data configs/dataset_v2.yaml --project runs/damage_seg_v2`) → `models/v1.2`,
+  y compararlo contra `baseline_v1.0` en el golden set (T3.5).
+
+### T4.5 — Evaluación y robustez del modelo de PARTES (carparts-seg)
+> **Hallazgo de la revisión (2026-06-09)**: el coste se calcula por **pieza**
+> (`piezas.yaml`, `baremo_horas.yaml`), así que un error del modelo de partes
+> corrompe el precio aunque la detección de daño sea perfecta. Hoy
+> `train_parts.py`/`localize.py` están FUERA del tracking: sin eval, sin criterio
+> de aceptación, sin mitigación de dominio (carparts-seg es genérico de Roboflow),
+> y corre a 640px frente a 1024px del modelo de daños. Es un punto único de fallo
+> silencioso para la estimación económica.
+- [ ] Añadir evaluación del modelo de partes: mAP por clase + **matriz de confusión
+  por zona** sobre un subconjunto representativo (idealmente fotos de parking).
+- [ ] Verificar la convención **izquierda/derecha** de `carparts-seg` (¿relativa a
+  la cámara o al vehículo?) — riesgo de inversión sistemática de lado en
+  `parts_config.yaml` (`front_left_*` → zona). Documentar el resultado.
+- [ ] Análisis de sensibilidad: "si la parte se confunde, ¿qué euros se equivocan?".
+- **Criterio**: criterio de aceptación explícito para el modelo de partes
+  (p.ej. acierto de zona ≥ X% en el golden set) y `side_uncertain` calibrado.
 
 ### T4.4 — Detector de daño preexistente entrenado
 - [ ] Crear `scripts/train_preexisting_detector.py`.
