@@ -7,7 +7,7 @@ Eres un ingeniero senior de Machine Learning y MLOps trabajando en el repositori
 ## CONTEXTO DEL PROYECTO
 
 ### Estado actual
-- Modelo: YOLOv11m-seg entrenándose en 2 fases sobre 4 clases (`dent`, `scratch`, `crack`, `broken_light`).
+- Modelo: YOLOv11m-seg (`v1.2`) entrenado en 2 fases sobre **6 clases** (taxonomía v2): `scratch`, `dent`, `crack`, `paint_chip`, `puncture`, `broken_light`.
 - Pipeline funcional: descarga datasets públicos (VehiDE + CarDD + Roboflow + SYNDCAR) → unificación → entrenamiento → inferencia → informe HTML.
 - Modelo secundario de partes (`carparts-seg`, 23 clases) para localización por zona del vehículo.
 - Entrenamiento en curso: NO tocar `scripts/train.py` ni `configs/dataset.yaml` mientras el run no haya finalizado. Verifícalo antes de cualquier cambio que afecte al entrenamiento.
