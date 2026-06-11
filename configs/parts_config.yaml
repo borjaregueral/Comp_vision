@@ -4,6 +4,13 @@
 # Un 2º modelo YOLOv11-seg entrenado sobre el dataset Ultralytics `carparts-seg`
 # (23 clases, con partes diferenciadas por lado) segmenta las partes del coche.
 # Cada daño se asigna a la zona de la parte con la que más solapa.
+#
+# CONVENCIÓN IZQUIERDA/DERECHA — VERIFICADO 2026-06-12: carparts-seg etiqueta el
+# lado RELATIVO AL VEHÍCULO (no a la cámara). Comprobado visualmente sobre el
+# dataset: en vista FRONTAL `front_left_light` cae a la DERECHA de la imagen
+# (= lado conductor LHD); en vista TRASERA `back_left_light` cae a la IZQUIERDA.
+# El lado cambia de lado de imagen según el ángulo → relativo al vehículo. Por eso
+# el mapeo `*_left_*` → zona `*_left` de abajo es CORRECTO. No hay inversión.
 
 # Modelo de partes entrenado (lo genera scripts/train_parts.py)
 parts_model: runs/parts_seg/train/weights/best.pt

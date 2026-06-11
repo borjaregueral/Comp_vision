@@ -310,10 +310,13 @@ Ahora sí, mejoras del modelo, pero guiadas por las métricas de negocio del Spr
       → coste por pieza real. **Validado end-to-end**: el mismo siniestro pasa de AMBAR
       (zona=unknown, piezas €0) a ROJO (zonas/piezas reales, faros traseros como
       `light_assembly` → €400 piezas, coste €1.528 → ROJO-2). 159 tests verdes.
-      ⏳ PENDIENTE: (1) **verificar convención izquierda/derecha** de carparts-seg
-      (¿relativa a cámara o vehículo?) — el modelo respeta la convención del dataset
-      (entrenado con fliplr=0) pero no se ha verificado cuál es; (2) eval por zona +
-      acierto sobre fotos reales de parking; (3) añadir faros traseros a `piezas.yaml`.
+      ✓ (1) **Convención izquierda/derecha VERIFICADA 2026-06-12**: carparts-seg es
+      RELATIVA AL VEHÍCULO (no a la cámara) — comprobado visualmente sobre el dataset
+      (front_left_light a la derecha en vista frontal; back_left_light a la izquierda
+      en vista trasera; el lado cambia con el ángulo → vehículo). El mapeo de zonas es
+      correcto, NO hay inversión. Documentado en `configs/parts_config.yaml`.
+      ⏳ PENDIENTE: (2) eval por zona + acierto sobre fotos reales de parking;
+      (3) añadir faros traseros a `piezas.yaml` (hoy caen a precio fallback).
 
 ### T4.4 — Detector de daño preexistente entrenado
 - [ ] Crear `scripts/train_preexisting_detector.py`.
