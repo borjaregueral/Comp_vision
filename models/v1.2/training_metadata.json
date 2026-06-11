@@ -1,0 +1,60 @@
+{
+  "model_id": "v1.2",
+  "task": "instance_segmentation",
+  "architecture": "YOLOv11m-seg (Ultralytics)",
+  "trained_on": "RunPod RTX 4090 (24GB)",
+  "date_trained": "2026-06-10/2026-06-11",
+  "date_registered": "2026-06-11",
+  "weights": {
+    "file": "models/v1.2/best.pt",
+    "sha256": "d56a7968fe46468119c57f52685089d87fe35324549d8d274a883291cfb4ca06",
+    "size_mb": 171
+  },
+  "classes": {
+    "0": "scratch",
+    "1": "dent",
+    "2": "crack",
+    "3": "paint_chip",
+    "4": "puncture",
+    "5": "broken_light"
+  },
+  "dataset": {
+    "name": "data/final_v2 (taxonomy v2, 6-class)",
+    "config": "configs/dataset_v2.yaml",
+    "taxonomy": "configs/taxonomy_v2.yaml (2.1.0-AUTOLABEL-6CLS)",
+    "construction": "auto_relabel.py: CLIP zero-shot re-typing of existing crops, coarse-label-constrained; recovered 20,082 previously-discarded Roboflow 'Damage' boxes; confidence floor 0.55 (unify_to_yolo --min-conf)",
+    "annotations_total": 39724,
+    "images_total": 17498,
+    "splits": {"train": 12246, "val": 3497, "test": 1755},
+    "annotations_by_class": {
+      "scratch": 16644, "dent": 8145, "crack": 6097,
+      "paint_chip": 2266, "puncture": 1841, "broken_light": 4731
+    },
+    "sources": ["CarDD", "VehiDE", "Roboflow (recovered)"]
+  },
+  "training": {
+    "scheme": "2-phase (frozen backbone warm-up -> full fine-tune)",
+    "base_weights": "yolo11m-seg.pt (COCO pretrained)",
+    "imgsz": 1024,
+    "optimizer": "AdamW",
+    "phase1": {"epochs": 20, "freeze": 10, "amp": true, "batch": 8},
+    "phase2": {"epochs_max": 280, "patience": 50, "amp": false, "batch": 4,
+               "stopped_at_epoch": 65, "stop_reason": "manual stop at plateau (val mAP flat ~7 epochs)",
+               "augmentations": "mosaic=1.0, mixup=0.15, copy_paste=0.3, degrees=15, translate=0.2, scale=0.5, fliplr=0.5, hsv"},
+    "notes": "Phase 2 requires --no-amp: AMP makes seg_loss diverge to NaN at backbone unfreeze (the v1 attempt NaN'd ~epoch 77). --no-amp doubles VRAM so batch dropped 8->4 on the 24GB GPU."
+  },
+  "metrics_test": {
+    "box": {"mAP50": 0.3395, "mAP50_95": 0.2009},
+    "mask": {"mAP50": 0.3075, "mAP50_95": 0.1412},
+    "note": "Test split of data/final_v2 (1755 imgs). NOT the la aseguradora golden set (still pending coordination, T3.5)."
+  },
+  "known_limitations": [
+    "paint_chip is weak (box mAP50 0.15, recall 0.15): rarest class + noisiest auto-labels (58% survived the 0.55 floor).",
+    "Labels are CLIP auto-generated (sampled human spot-check), not fully human-verified.",
+    "Domain gap: trained on public datasets, not real parking-claim phone photos.",
+    "Downstream economics (baremo/precios/piezas) are PLACEHOLDER.",
+    "Parts model (zones/part_category) not wired -> localize.py unused (T4.5)."
+  ],
+  "supersedes": null,
+  "status": "experimental — not production-signed; pilot gate needs golden-set eval (T3.5)"
+}

@@ -1,0 +1,44 @@
+# ============================================================================
+# data_lineage.yaml — provenance of datasets, models and reported metrics (T5.3)
+# ============================================================================
+# Every dataset, model and headline metric reported to the business records its
+# origin, date, hash and responsible person. Append-only; never rewrite history.
+version: "0.1.0"
+updated: "2026-06-11"
+
+datasets:
+  - id: final_v2
+    description: "6-class de-noised damage segmentation dataset (taxonomy v2)"
+    built_by: "scripts/auto_relabel.py + scripts/unify_to_yolo.py --min-conf 0.55"
+    config: "configs/dataset_v2.yaml"
+    taxonomy: "configs/taxonomy_v2.yaml (2.1.0-AUTOLABEL-6CLS)"
+    sources: ["CarDD", "VehiDE", "Roboflow (recovered 20,082 'Damage' boxes)"]
+    annotations: 39724
+    images: 17498
+    splits: {train: 12246, val: 3497, test: 1755}
+    labeling: "CLIP zero-shot re-typing, coarse-constrained; 0.55 confidence floor; sampled human spot-check"
+    date: "2026-06-09"
+    owner: "Borja Regueral"
+    notes: "Auto-labels, NOT fully human-verified. PII-free (public datasets)."
+
+models:
+  - id: v1.2
+    description: "YOLOv11m-seg, 6-class damage instance segmentation"
+    weights: "models/v1.2/best.pt"
+    sha256: "d56a7968fe46468119c57f52685089d87fe35324549d8d274a883291cfb4ca06"
+    trained_on: "dataset:final_v2"
+    base: "yolo11m-seg.pt (COCO pretrained)"
+    date: "2026-06-10/11"
+    metadata: "models/v1.2/training_metadata.json"
+    model_card: "model_cards/v1.2.md"
+    owner: "Borja Regueral"
+    status: "experimental — not production-signed"
+
+metrics:
+  - of: "model:v1.2"
+    on: "test split of dataset:final_v2 (1755 imgs)"
+    box_mAP50: 0.339
+    mask_mAP50: 0.307
+    source: "evaluation_results/metrics.json"
+    date: "2026-06-11"
+    caveat: "Public-data test split, NOT the la aseguradora golden set (T3.5 still pending coordination)."
