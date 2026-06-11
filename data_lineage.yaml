@@ -34,6 +34,17 @@ models:
     owner: "Borja Regueral"
     status: "experimental — not production-signed"
 
+  - id: parts_seg
+    description: "YOLOv11m-seg car-parts segmenter (23 classes) for zone/part assignment"
+    weights: "models/parts_seg/best.pt"
+    trained_on: "carparts-seg (Ultralytics, ~3156 train imgs)"
+    base: "yolo11m-seg.pt (COCO pretrained)"
+    date: "2026-06-11"
+    metrics: "box mAP50 0.867 / mask mAP50 0.883 @ epoch 54"
+    used_by: "scripts/localize.py + scripts/assess_claim.py --parts-model (T4.5)"
+    owner: "Borja Regueral"
+    notes: "fliplr=0 in training to preserve left/right; carparts-seg L/R convention not yet verified vs vehicle frame."
+
 metrics:
   - of: "model:v1.2"
     on: "test split of dataset:final_v2 (1755 imgs)"

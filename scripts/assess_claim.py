@@ -75,7 +75,8 @@ def _default_damage_detector(model_path: Optional[str] = None) -> Callable:
         from predict import run_inference  # reuse existing inference mapping
         report = run_inference(model, Path(image_path))
         return [
-            {"type": d["class"], "confidence": d["confidence"], "area_pct": d.get("area_pct")}
+            {"type": d["class"], "confidence": d["confidence"], "area_pct": d.get("area_pct"),
+             "bbox": d.get("bbox"), "mask_polygon": d.get("mask_polygon")}
             for d in report.get("damages", [])
         ]
 
@@ -91,6 +92,7 @@ def assess_claim(
     *,
     damage_detector: Optional[Callable] = None,
     quality_vehicle_detector: Optional[Callable] = None,
+    parts_model: Optional[object] = None,
     estimator: Optional[Callable] = None,
     model_version: Optional[dict] = None,
     rules: Optional[dict] = None,
@@ -134,6 +136,15 @@ def assess_claim(
     province = metadata.get("provincia")
     severity_matrix = severity.load_severity_matrix()
     alerts_config = alerts.load_config()
+
+    # Parts/zone localization (T4.5): if a parts model is supplied, each damage is
+    # assigned a zone + part (carparts-seg overlap) -> part_category for real costing.
+    # Without it, damages keep zone="unknown" and the unknown-part fallback applies.
+    part_to_category = severity_matrix.get("part_to_category", {}) or {}
+    parts_cfg = None
+    if parts_model is not None:
+        import localize
+        parts_cfg = localize.load_parts_config()
 
     # Cost estimator: the real estimate_cost (reference tables loaded ONCE) unless
     # a custom estimator(damages, metadata, province) is injected.
@@ -184,6 +195,13 @@ def assess_claim(
 
         if verdict["valid"]:
             raw = [d for d in damage_detector(img_path) if d.get("type") in _DAMAGE_TYPES]
+            if parts_cfg is not None and raw:  # parts_cfg set iff parts_model provided
+                import localize
+                localize.enrich_report_with_zones({"damages": raw}, img_path, parts_model, parts_cfg)
+                for d in raw:
+                    matched = d.get("matched_part")
+                    d["part"] = matched or "unknown"
+                    d["part_category"] = part_to_category.get(matched, "unknown")
             per_image_damages.append({"image_hash": image_hash, "damages": raw})
 
     quality = {
@@ -282,6 +300,9 @@ def main():
     parser.add_argument("--metadata", type=Path, required=True, help="Claim metadata JSON file.")
     parser.add_argument("--model", type=Path, default=None,
                         help="Damage model .pt (default: models/baseline_v1.0/best.pt).")
+    parser.add_argument("--parts-model", type=Path, default=None,
+                        help="Parts seg model .pt for zone/part assignment "
+                             "(e.g. runs/parts_seg/train/weights/best.pt). Without it, zone=unknown.")
     parser.add_argument("--output", type=Path, default=None, help="Write the JSON output here.")
     parser.add_argument("--log-dir", type=Path, default=None, help="Override audit log directory.")
     args = parser.parse_args()
@@ -293,10 +314,16 @@ def main():
         parser.error(f"No images found in {args.images}")
 
     detector = _default_damage_detector(str(args.model)) if args.model else None
-    model_version = ({"damage_model": args.model.parent.name, "parts_model": "none"}
-                     if args.model else None)
+    parts_model = None
+    if args.parts_model:
+        from ultralytics import YOLO
+        parts_model = YOLO(str(args.parts_model))
+    model_version = {
+        "damage_model": args.model.parent.name if args.model else "default",
+        "parts_model": "carparts-seg" if args.parts_model else "none",
+    }
     output = assess_claim(args.claim_id, images, metadata, damage_detector=detector,
-                          model_version=model_version, log_dir=args.log_dir)
+                          parts_model=parts_model, model_version=model_version, log_dir=args.log_dir)
 
     text = json.dumps(output, indent=2, ensure_ascii=False)
     if args.output:
