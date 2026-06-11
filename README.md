@@ -13,8 +13,7 @@ Sistema end-to-end de visión artificial para detectar, segmentar y clasificar d
 | 4  | `puncture` | Perforaciones / agujeros pasantes en el panel |
 | 5  | `broken_light` | Faros, pilotos, intermitentes rotos |
 
-> Taxonomía **v2** (modelo `v1.2`, `configs/taxonomy_v2.yaml`). La v1 original tenía 4 clases
-> (sin `paint_chip` ni `puncture`). **Excluidos:** pinchazos/neumáticos y lunas/cristales.
+> Taxonomía **v2** (modelo `v1.2`, `configs/taxonomy_v2.yaml`). **Excluidos:** pinchazos/neumáticos y lunas/cristales.
 
 ## 🏗️ Arquitectura
 
