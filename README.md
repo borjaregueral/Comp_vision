@@ -2,16 +2,19 @@
 
 Sistema end-to-end de visión artificial para detectar, segmentar y clasificar daños en vehículos a partir de fotografías, generando un dataset anotado reutilizable e informes de peritación profesionales.
 
-## 🎯 Clases de Daño
+## 🎯 Clases de Daño (taxonomía v2 — 6 clases)
 
 | ID | Clase | Descripción |
 |----|-------|-------------|
-| 0  | `dent` | Abolladuras, golpes, deformaciones de chapa |
-| 1  | `scratch` | Arañazos, rozaduras, marcas de pintura |
+| 0  | `scratch` | Arañazos, rozaduras, marcas de pintura |
+| 1  | `dent` | Abolladuras, golpes, deformaciones de chapa |
 | 2  | `crack` | Grietas, roturas de plástico/paragolpes |
-| 3  | `broken_light` | Faros, pilotos, intermitentes rotos |
+| 3  | `paint_chip` | Desconchones / saltados de pintura |
+| 4  | `puncture` | Perforaciones / agujeros pasantes en el panel |
+| 5  | `broken_light` | Faros, pilotos, intermitentes rotos |
 
-> **Excluidos:** pinchazos/neumáticos y lunas/cristales
+> Taxonomía **v2** (modelo `v1.2`, `configs/taxonomy_v2.yaml`). La v1 original tenía 4 clases
+> (sin `paint_chip` ni `puncture`). **Excluidos:** pinchazos/neumáticos y lunas/cristales.
 
 ## 🏗️ Arquitectura
 
