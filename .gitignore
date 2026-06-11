@@ -61,3 +61,6 @@ kaggle.json
 
 # Ultralytics auto-downloaded datasets (carparts-seg etc.)
 datasets/
+
+# Config local de Claude Code (no debe ir al repo)
+.claude/

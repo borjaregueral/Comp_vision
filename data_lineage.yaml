@@ -52,4 +52,4 @@ metrics:
     mask_mAP50: 0.307
     source: "evaluation_results/metrics.json"
     date: "2026-06-11"
-    caveat: "Public-data test split, NOT the la aseguradora golden set (T3.5 still pending coordination)."
+    caveat: "Public-data test split, NOT the insurer golden set (T3.5 still pending coordination)."
