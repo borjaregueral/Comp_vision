@@ -2,9 +2,9 @@
 Tests for the economic reference tables (T2.1):
 configs/baremo_horas.yaml, configs/precios_taller.yaml, configs/piezas.yaml.
 
-Beyond "they parse", these enforce structure, value sanity, the minimum
-coverage documented in configs/REFERENCES.md, and cross-consistency with the
-output schema (part_category / repair_decision vocabularies). They also assert
+Beyond "they parse", these enforce structure, value sanity, minimum coverage,
+and cross-consistency with the output schema (part_category / repair_decision
+vocabularies). They also assert
 the PLACEHOLDER marker is present, so real data cannot be shipped silently
 without bumping the version.
 """

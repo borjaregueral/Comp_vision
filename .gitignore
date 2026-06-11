@@ -69,3 +69,9 @@ AGENT_PROMPT.md
 # Copias de conflicto de iCloud (repo en ~/Documents sincronizado)
 * 2.*
 * 2
+
+# Docs internos (no van al repo público)
+implementation_plan.md
+README_TEMPLATES.md
+configs/REFERENCES.md
+docs/MODEL_CARD_TEMPLATE.md
