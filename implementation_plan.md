@@ -14,6 +14,11 @@ Antes de tocar nada, verifica el estado del entrenamiento y prepara la infraestr
 - [ ] Si ha terminado: copiar `best.pt` a `models/baseline_v1.0/` y registrar en `data_lineage.yaml`.
 - **Salida**: `models/baseline_v1.0/best.pt` + `models/baseline_v1.0/training_metadata.json`.
       ⏸ EN ESPERA 2026-06-06: el run Fase 2 corre en GPU remota (SSH, ver `setup_gpu.sh`); no hay `best.pt` en local (`runs/` vacío, sin `results.csv`, único `.pt` es el base COCO `yolo11m-seg.pt`). No se puede generar `models/baseline_v1.0/` ni documentar epoch/métricas/ETA hasta tener acceso a los artefactos del run. Confirmado con el usuario.
+      ✅ RESUELTO 2026-06-11: modelo **v1.2** (6 clases) entrenado en RunPod y
+      descargado. Registrado: `models/v1.2/best.pt` (sha256 d56a7968…), `models/
+      v1.2/training_metadata.json`, y `data_lineage.yaml` (dataset final_v2 + modelo
+      v1.2 + métricas). Nota: es v1.2 (no baseline_v1.0) — la 4-clases original
+      nunca se descargó; v1.2 la sustituye como modelo de referencia de trabajo.
 
 ### T0.2 — Crear estructura de directorios nueva
 - [x] Crear `schemas/`, `logs/`, `model_cards/`, `business_rules/`, `tests/`, `golden_set/` (gitignored), `eval_business/`.
@@ -200,6 +205,16 @@ Sin esto, no sabes si el sistema funciona en producción.
 - [ ] Generar `eval_business/baseline_v1.0_report.html`.
 - [ ] Crear `model_cards/v1.0.md` con: dataset de entrenamiento, métricas en validation, métricas en golden set, sesgos detectados (por marca/color/provincia), limitaciones conocidas, fecha.
 - **Criterio de aceptación del Sprint 3**: el reporte de negocio existe, contiene las 6 métricas clave con intervalos de confianza, y la model card está firmada con el hash del `best.pt`.
+      ◐ PARCIAL 2026-06-11 (lo que el modelo ya desbloquea): evaluado v1.2 sobre el
+      **test split** (no golden set) → `evaluation_results/metrics.json` (box mAP50
+      0.339 / mask 0.307; por clase: broken_light 0.64 fuerte, paint_chip 0.15 débil).
+      **`model_cards/v1.2.md`** creada con métricas reales, sesgos/limitaciones y el
+      hash del `best.pt` (pendiente de firma técnica+legal).
+      ⏳ BLOQUEADO (datos, no modelo): `business_metrics.py` sobre el **golden set real
+      de Mutua** (MAE €, % verde, FN estructural, kappa) + `eval_business/*_report.html`.
+      Requiere el extracto de cartera anonimizado (coordinación Mutua, ver T3.1).
+      Sesgo por marca/color/provincia (T5.2): los datasets públicos no traen esa
+      metadata → diferido al golden set.
 
 ---
 
@@ -288,6 +303,17 @@ Ahora sí, mejoras del modelo, pero guiadas por las métricas de negocio del Spr
 - [ ] Análisis de sensibilidad: "si la parte se confunde, ¿qué euros se equivocan?".
 - **Criterio**: criterio de aceptación explícito para el modelo de partes
   (p.ej. acierto de zona ≥ X% en el golden set) y `side_uncertain` calibrado.
+      ◐ HECHO 2026-06-12 (entrenado + cableado): modelo de partes **carparts-seg**
+      (yolo11m-seg, 60 ep, RunPod) → **box mAP50 0.867 / mask 0.883** @ ep54, sin NaN.
+      `models/parts_seg/best.pt` (23 clases). **`assess_claim.py` cableado** (`--parts-model`):
+      `localize.enrich_report_with_zones` asigna zona+parte a cada daño → `part_category`
+      → coste por pieza real. **Validado end-to-end**: el mismo siniestro pasa de AMBAR
+      (zona=unknown, piezas €0) a ROJO (zonas/piezas reales, faros traseros como
+      `light_assembly` → €400 piezas, coste €1.528 → ROJO-2). 159 tests verdes.
+      ⏳ PENDIENTE: (1) **verificar convención izquierda/derecha** de carparts-seg
+      (¿relativa a cámara o vehículo?) — el modelo respeta la convención del dataset
+      (entrenado con fliplr=0) pero no se ha verificado cuál es; (2) eval por zona +
+      acierto sobre fotos reales de parking; (3) añadir faros traseros a `piezas.yaml`.
 
 ### T4.4 — Detector de daño preexistente entrenado
 - [ ] Crear `scripts/train_preexisting_detector.py`.
