@@ -50,7 +50,7 @@ log = logging.getLogger("assess_claim")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PIPELINE_VERSION = "assess_claim/0.2.0"  # Sprint 2: real cost/severity/alerts/aggregation
 
-_DAMAGE_TYPES = {"dent", "scratch", "crack", "broken_light"}
+_DAMAGE_TYPES = {"dent", "scratch", "crack", "broken_light", "paint_chip", "puncture"}
 
 
 # ── Production default components (lazy, untested offline) ───────────
@@ -280,6 +280,8 @@ def main():
     parser.add_argument("--claim-id", required=True)
     parser.add_argument("--images", type=Path, required=True, help="Image file or directory.")
     parser.add_argument("--metadata", type=Path, required=True, help="Claim metadata JSON file.")
+    parser.add_argument("--model", type=Path, default=None,
+                        help="Damage model .pt (default: models/baseline_v1.0/best.pt).")
     parser.add_argument("--output", type=Path, default=None, help="Write the JSON output here.")
     parser.add_argument("--log-dir", type=Path, default=None, help="Override audit log directory.")
     args = parser.parse_args()
@@ -290,7 +292,11 @@ def main():
     if not images:
         parser.error(f"No images found in {args.images}")
 
-    output = assess_claim(args.claim_id, images, metadata, log_dir=args.log_dir)
+    detector = _default_damage_detector(str(args.model)) if args.model else None
+    model_version = ({"damage_model": args.model.parent.name, "parts_model": "none"}
+                     if args.model else None)
+    output = assess_claim(args.claim_id, images, metadata, damage_detector=detector,
+                          model_version=model_version, log_dir=args.log_dir)
 
     text = json.dumps(output, indent=2, ensure_ascii=False)
     if args.output:
