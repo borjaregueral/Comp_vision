@@ -64,3 +64,8 @@ datasets/
 
 # Config local de Claude Code (no debe ir al repo)
 .claude/
+AGENT_PROMPT.md
+
+# Copias de conflicto de iCloud (repo en ~/Documents sincronizado)
+* 2.*
+* 2
