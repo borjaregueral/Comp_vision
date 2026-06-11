@@ -114,6 +114,29 @@ Punto de entrada: [`scripts/assess_claim.py`](../scripts/assess_claim.py).
 Config de taxonomía: [`configs/taxonomy_v2.yaml`](../configs/taxonomy_v2.yaml). Trazabilidad:
 [`data_lineage.yaml`](../data_lineage.yaml).
 
+### 5.1 Alcance y exclusiones (qué NO cubre el sistema)
+
+**Fuera de alcance por decisión explícita:** lunas/cristales (parabrisas, ventanillas) y
+neumáticos/pinchazos. Se aplica en **dos niveles** en `configs/data_config.yaml`:
+
+1. **Mapeo explícito a `null`** de las clases conocidas de origen: `Glass Shatter`,
+   `Tire Flat`, `vo_kinh` (cristal roto), `mat_bo_phan` (pieza ausente), `flat_tire`,
+   `glass_shatter`, `broken_glass`…
+2. **Patrones de exclusión por substring** (case-insensitive), como red de seguridad para
+   clases no previstas: `tire`, `tyre`, `flat`, `glass`, `windshield`, `window`, `luna`,
+   `cristal`, `parabrisas`.
+
+**Matiz v2 (NO confundir con el doc viejo de 4 clases):** en v1 la clase **genérica `Damage`**
+(datasets mono-clase tipo Roboflow/SInfo) se mapeaba a `null` — se excluía porque no distingue
+tipo y contaminaría las clases. En **v2 ya NO se excluye**: `auto_relabel.py` lee esos
+**20.082 boxes `Damage`** directamente del COCO de Roboflow y los **tipa con CLIP**
+(recuperación). Las exclusiones de **lunas/neumáticos sí siguen vigentes** en v2 (la taxonomía
+de 6 clases no incluye ninguna de esas categorías).
+
+**⚠️ Cuidado con `puncture`:** la clase v2 `puncture` es una **perforación/agujero en un PANEL
+de carrocería** (chapa o plástico) — **no** un pinchazo de neumático, que está excluido. Es una
+confusión fácil que un revisor podría plantear.
+
 ---
 
 ## 6. La capa operativa / de negocio (determinista)
