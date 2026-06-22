@@ -123,7 +123,9 @@ def download_vehide(output_dir: Path, dry_run: bool = False) -> Path:
         console.print("[bold green]⬇ Descargando VehiDE desde Kaggle...[/]")
         kaggle.api.authenticate()
         kaggle.api.dataset_download_files(
-            "hendrichscullen/vehide-dataset",
+            # Slug actualizado: el dataset se renombró en Kaggle. El antiguo
+            # "hendrichscullen/vehide-dataset" devuelve 403 Forbidden.
+            "hendrichscullen/vehide-dataset-automatic-vehicle-damage-detection",
             path=str(dataset_dir),
             unzip=True,
         )
@@ -138,7 +140,8 @@ def download_vehide(output_dir: Path, dry_run: bool = False) -> Path:
     except Exception as e:
         log.error("Error descargando VehiDE: %s", e)
         log.info(
-            "Descarga manual: https://www.kaggle.com/datasets/hendrichscullen/vehide-dataset\n"
+            "Descarga manual: https://www.kaggle.com/datasets/"
+            "hendrichscullen/vehide-dataset-automatic-vehicle-damage-detection\n"
             "Descomprime en: %s", dataset_dir
         )
         raise
