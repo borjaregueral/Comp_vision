@@ -985,8 +985,13 @@ def main():
     console.print("\n[bold]Fusionando datasets...[/]")
     merged = merge_coco_datasets([ds for ds, _ in processed_datasets])
 
-    # Copiar imágenes al directorio unificado
-    unified_dir = UNIFIED_OUTPUT
+    # Copiar imágenes al directorio unificado. El destino se toma de
+    # config["paths"]["unified"] (p.ej. data/unified_vehide4) para no pisar el
+    # data/unified multi-fuente; si no está, se usa el constante por defecto.
+    cfg_unified = (config.get("paths", {}) or {}).get("unified")
+    unified_dir = Path(cfg_unified) if cfg_unified else UNIFIED_OUTPUT
+    if not unified_dir.is_absolute():
+        unified_dir = PROJECT_ROOT / unified_dir
     unified_dir.mkdir(parents=True, exist_ok=True)
 
     source_dirs = [ddir for _, ddir in processed_datasets]

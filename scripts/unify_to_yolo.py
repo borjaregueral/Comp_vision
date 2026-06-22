@@ -15,6 +15,7 @@ import argparse
 import json
 import logging
 import random
+import re
 import shutil
 import sys
 from collections import Counter, defaultdict
@@ -60,6 +61,10 @@ def coco_segmentation_to_yolo(
         Lista de polígonos normalizados. Vacía si no hay polígonos válidos.
     """
     yolo_polygons = []
+
+    # Guard: invalid image dimensions would produce NaN/Inf normalized coords.
+    if not img_width or not img_height or img_width <= 0 or img_height <= 0:
+        return yolo_polygons
 
     for polygon in segmentation:
         if not isinstance(polygon, list):
@@ -201,6 +206,222 @@ def create_stratified_splits(
         random.shuffle(split)
 
     return splits
+
+
+# =====================================================================
+# Leakage-free grouped splitting (perceptual-hash dedup + group-by-vehicle)
+# =====================================================================
+# WHY: create_stratified_splits shuffles per IMAGE. If the same vehicle/claim
+# appears in several photos (or a near-duplicate of an image exists), copies leak
+# across train/val/test and inflate the reported metrics. create_grouped_splits
+# assigns whole GROUPS (near-duplicate cluster ∪ filename-derived vehicle key) to
+# a single split, so no image — and no near-duplicate of it — ever crosses splits.
+
+def _dhash(image_path: Path, hash_size: int = 8) -> "int | None":
+    """Difference hash (dHash) of an image as an int. None if unreadable.
+
+    Robust to mild res/compression changes, so near-identical photos collide.
+    Lazily imports Pillow/numpy so the module imports without them.
+    """
+    try:
+        from PIL import Image  # type: ignore
+        import numpy as np  # type: ignore
+    except ImportError:
+        return None
+    try:
+        with Image.open(image_path) as im:
+            small = im.convert("L").resize((hash_size + 1, hash_size), Image.BILINEAR)
+            px = np.asarray(small, dtype=np.int16)
+    except Exception:
+        return None
+    diff = px[:, 1:] > px[:, :-1]
+    value = 0
+    for bit in diff.flatten():
+        value = (value << 1) | int(bit)
+    return value
+
+
+def _hamming(a: int, b: int) -> int:
+    """Hamming distance between two hashes (popcount of XOR)."""
+    return bin(a ^ b).count("1")
+
+
+class _BKTree:
+    """Minimal BK-tree for efficient 'all hashes within distance t' queries."""
+
+    def __init__(self) -> None:
+        self._root: "tuple | None" = None  # (hash, key, {dist: child_node})
+
+    def add(self, h: int, key) -> None:
+        if self._root is None:
+            self._root = (h, key, {})
+            return
+        node = self._root
+        while True:
+            d = _hamming(h, node[0])
+            child = node[2].get(d)
+            if child is None:
+                node[2][d] = (h, key, {})
+                return
+            node = child
+
+    def query(self, h: int, threshold: int) -> list:
+        if self._root is None:
+            return []
+        out: list = []
+        stack = [self._root]
+        while stack:
+            node = stack.pop()
+            d = _hamming(h, node[0])
+            if d <= threshold:
+                out.append(node[1])
+            lo, hi = d - threshold, d + threshold
+            for dist, child in node[2].items():
+                if lo <= dist <= hi:
+                    stack.append(child)
+        return out
+
+
+def _uf_find(parent: dict, x):
+    """Union-find with path compression."""
+    root = x
+    while parent[root] != root:
+        root = parent[root]
+    while parent[x] != root:
+        parent[x], x = root, parent[x]
+    return root
+
+
+def _uf_union(parent: dict, a, b) -> None:
+    ra, rb = _uf_find(parent, a), _uf_find(parent, b)
+    if ra != rb:
+        parent[rb] = ra
+
+
+def _filename_group_key(stem: str, pattern: "str | None") -> str:
+    """Derive a vehicle/claim group key from a filename stem via regex group 1."""
+    if pattern:
+        m = re.match(pattern, stem)
+        if m and m.lastindex:
+            return m.group(1) or stem
+    return stem
+
+
+def create_grouped_splits(
+    coco_data: dict,
+    images_dir: "Path | None",
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.2,
+    test_ratio: float = 0.1,
+    seed: int = 42,
+    group_from_filename: "str | None" = None,
+    dedup_phash: bool = True,
+    phash_threshold: int = 6,
+    class_names: "dict | None" = None,
+) -> "tuple[dict[str, list[int]], dict]":
+    """Leakage-free splits: cluster near-duplicates + same-vehicle photos into
+    groups, then assign whole groups to train/val/test (stratified by each
+    group's dominant class).
+
+    Returns:
+        (splits, audit) — splits maps "train"/"val"/"test" → image_ids; audit is a
+        JSON-serializable dict proving no group spans multiple splits.
+    """
+    random.seed(seed)
+    images = {img["id"]: img for img in coco_data["images"]}
+
+    anns_by_image: dict[int, list] = defaultdict(list)
+    for ann in coco_data["annotations"]:
+        anns_by_image[ann["image_id"]].append(ann["category_id"])
+
+    # 1) union-find over images, seeded by filename-derived vehicle/claim key
+    parent: dict = {img_id: img_id for img_id in images}
+    key_rep: dict = {}
+    for img_id, img in images.items():
+        stem = Path(img["file_name"]).stem
+        key = _filename_group_key(stem, group_from_filename)
+        if key in key_rep:
+            _uf_union(parent, key_rep[key], img_id)
+        else:
+            key_rep[key] = img_id
+
+    # 2) merge near-duplicate images (perceptual hash) into the same group
+    phash_audit = {"computed": 0, "missing": 0, "dup_pairs": 0, "enabled": bool(dedup_phash)}
+    if dedup_phash and images_dir is not None:
+        tree = _BKTree()
+        for img_id, img in images.items():
+            h = _dhash(images_dir / img["file_name"])
+            if h is None:
+                phash_audit["missing"] += 1
+                continue
+            phash_audit["computed"] += 1
+            for nb in tree.query(h, phash_threshold):
+                _uf_union(parent, img_id, nb)
+                phash_audit["dup_pairs"] += 1
+            tree.add(h, img_id)
+
+    # 3) collect groups
+    groups: dict = defaultdict(list)
+    for img_id in images:
+        groups[_uf_find(parent, img_id)].append(img_id)
+
+    def _dominant(img_ids: list) -> int:
+        c: Counter = Counter()
+        for i in img_ids:
+            c.update(anns_by_image.get(i, []))
+        return c.most_common(1)[0][0] if c else -1
+
+    # 4) stratify groups by dominant class, assign whole groups to splits
+    by_class: dict = defaultdict(list)
+    for member_ids in groups.values():
+        by_class[_dominant(member_ids)].append(member_ids)
+
+    splits: dict[str, list[int]] = {"train": [], "val": [], "test": []}
+    for grouplist in by_class.values():
+        random.shuffle(grouplist)
+        n = len(grouplist)
+        n_train = min(int(round(n * train_ratio)), n)
+        n_val = min(int(round(n * val_ratio)), n - n_train)
+        for gi, member_ids in enumerate(grouplist):
+            if gi < n_train:
+                splits["train"].extend(member_ids)
+            elif gi < n_train + n_val:
+                splits["val"].extend(member_ids)
+            else:
+                splits["test"].extend(member_ids)
+    for ids in splits.values():
+        random.shuffle(ids)
+
+    # 5) integrity check: no group may span more than one split
+    img_to_split = {img_id: s for s, ids in splits.items() for img_id in ids}
+    spanning = 0
+    for member_ids in groups.values():
+        if len({img_to_split.get(i) for i in member_ids}) > 1:
+            spanning += 1
+
+    def _class_counts(ids: list) -> dict:
+        c: Counter = Counter()
+        for i in ids:
+            for cid in anns_by_image.get(i, []):
+                c[cid] += 1
+        if class_names:
+            return {class_names.get(int(k), str(k)): v for k, v in sorted(c.items())}
+        return {str(k): v for k, v in sorted(c.items())}
+
+    audit = {
+        "strategy": "grouped",
+        "seed": seed,
+        "n_images": len(images),
+        "n_groups": len(groups),
+        "phash": phash_audit,
+        "ratios_requested": {"train": train_ratio, "val": val_ratio, "test": test_ratio},
+        "splits": {
+            s: {"images": len(ids), "annotations_by_class": _class_counts(ids)}
+            for s, ids in splits.items()
+        },
+        "cross_split_groups": spanning,  # MUST be 0 — proof of no leakage
+    }
+    return splits, audit
 
 
 def organize_splits(
@@ -455,18 +676,53 @@ def main():
     log.info("Convertidas %d imágenes a formato YOLO-seg", len(image_labels))
 
     # Crear splits
-    console.rule("[bold]Splitting Estratificado[/]")
     split_ratios = config.get("splits", {})
-    splits = create_stratified_splits(
-        coco_data, image_labels,
-        train_ratio=split_ratios.get("train", 0.7),
-        val_ratio=split_ratios.get("val", 0.2),
-        test_ratio=split_ratios.get("test", 0.1),
-        seed=args.seed,
-    )
+    split_cfg = config.get("split", {}) or {}
+    strategy = split_cfg.get("strategy", "stratified")
+    audit = None
+
+    if strategy == "grouped":
+        console.rule("[bold]Splitting Agrupado (leakage-free)[/]")
+        classes = {int(k): v for k, v in config.get("classes", {}).items()}
+        splits, audit = create_grouped_splits(
+            coco_data,
+            images_dir=args.input / "images",
+            train_ratio=split_ratios.get("train", 0.7),
+            val_ratio=split_ratios.get("val", 0.2),
+            test_ratio=split_ratios.get("test", 0.1),
+            seed=args.seed,
+            group_from_filename=split_cfg.get("group_from_filename"),
+            dedup_phash=bool(split_cfg.get("dedup_phash", True)),
+            phash_threshold=int(split_cfg.get("phash_threshold", 6)),
+            class_names=classes,
+        )
+        log.info("  grupos: %d · imágenes: %d · near-dup pairs: %d · grupos que cruzan splits: %d",
+                 audit["n_groups"], audit["n_images"], audit["phash"]["dup_pairs"],
+                 audit["cross_split_groups"])
+        if audit["cross_split_groups"] != 0:
+            log.error("  ⚠ %d grupos cruzan splits — hay fuga. Revisa la lógica de agrupado.",
+                      audit["cross_split_groups"])
+    else:
+        console.rule("[bold]Splitting Estratificado (legacy, por imagen)[/]")
+        splits = create_stratified_splits(
+            coco_data, image_labels,
+            train_ratio=split_ratios.get("train", 0.7),
+            val_ratio=split_ratios.get("val", 0.2),
+            test_ratio=split_ratios.get("test", 0.1),
+            seed=args.seed,
+        )
 
     for split_name, ids in splits.items():
         log.info("  %s: %d imágenes", split_name, len(ids))
+
+    # Auditoría de fuga (siempre que haya estrategia agrupada): prueba escrita de
+    # que ningún grupo cruza splits + distribución por clase de cada split.
+    if audit is not None:
+        args.output.mkdir(parents=True, exist_ok=True)
+        audit_path = args.output / "leakage_audit.json"
+        with open(audit_path, "w") as f:
+            json.dump(audit, f, indent=2, ensure_ascii=False)
+        log.info("  Auditoría de fuga: %s", audit_path)
 
     # Estadísticas
     compute_statistics(coco_data, splits, config)

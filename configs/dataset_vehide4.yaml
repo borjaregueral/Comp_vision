@@ -1,0 +1,9 @@
+path: /Users/borja/dev/Comp_vision/data/final_vehide4
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: scratch
+  1: dent
+  2: crack
+  3: broken_light
