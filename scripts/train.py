@@ -70,6 +70,7 @@ def train_phase1(
     amp: bool = True,
     workers: int = 16,
     cache: "bool | str" = True,
+    mask_ratio: int = 4,
 ) -> Path:
     """Fase 1: Entrena con backbone congelado (warm-up)."""
     from ultralytics import YOLO
@@ -100,6 +101,7 @@ def train_phase1(
         device=device,
         workers=workers,
         cache=cache,
+        mask_ratio=mask_ratio,
         project=project,
         name="phase1_frozen",
         exist_ok=True,
@@ -133,6 +135,7 @@ def train_phase2(
     amp: bool = True,
     workers: int = 16,
     cache: "bool | str" = True,
+    mask_ratio: int = 4,
 ) -> Path:
     """Fase 2: Fine-tuning completo con augmentaciones."""
     from ultralytics import YOLO
@@ -179,6 +182,7 @@ def train_phase2(
         device=device,
         workers=workers,
         cache=cache,
+        mask_ratio=mask_ratio,
         project=project,
         name="phase2_finetune",
         exist_ok=True,
@@ -244,6 +248,12 @@ def parse_args():
         help="Cachear imágenes para no esperar al disco (default: ram). Ultralytics se "
              "desactiva solo si no cabe en RAM, así que es seguro por defecto.",
     )
+    parser.add_argument(
+        "--mask-ratio", type=int, default=4,
+        help="Downsample de las máscaras GT para la loss de segmentación (default: 4, "
+             "el de Ultralytics). Usa 1 para daños finos (rayones/grietas): con 4 una "
+             "raya de 1-2px se vuelve sub-pixel y desaparece de la supervisión.",
+    )
     parser.add_argument("--epochs-phase1", type=int, default=20, help="Epochs fase 1 (default: 20)")
     parser.add_argument("--epochs-phase2", type=int, default=280, help="Epochs fase 2 (default: 280)")
     parser.add_argument(
@@ -306,6 +316,7 @@ def main():
             amp=args.amp,
             workers=args.workers,
             cache=cache_val,
+            mask_ratio=args.mask_ratio,
         )
 
     if args.phase1_only:
@@ -337,6 +348,7 @@ def main():
         amp=args.amp,
         workers=args.workers,
         cache=cache_val,
+        mask_ratio=args.mask_ratio,
     )
 
     # ── Resumen ───────────────────────────────────────────────────
