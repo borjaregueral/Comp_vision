@@ -76,3 +76,9 @@ README_TEMPLATES.md
 configs/REFERENCES.md
 docs/MODEL_CARD_TEMPLATE.md
 detection_seg_pilot_plan.md
+
+# Materiales internos de presentación / arquitectura (no van al repo)
+docs/ARCHITECTURE.md
+presentation_arquitectura.pptx
+scripts/build_deck.py
+~$*
