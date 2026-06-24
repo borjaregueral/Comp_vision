@@ -16,6 +16,11 @@
 #   bash setup_gpu.sh --vehide4 --epochs-phase2 100    # baseline más corto
 #   bash setup_gpu.sh --vehide4 --batch 16             # GPU grande: sube el batch
 #
+#   # Tier 1.3 — segundo run, ataca el suelo de scratch/crack (finos). Pesado:
+#   # mask-ratio 1 + 1280px → necesita A100 (40/80GB); en 24GB baja a --batch 2:
+#   bash setup_gpu.sh --vehide4 --imgsz 1280 --mask-ratio 1 --batch 8 \
+#        --scale 0.25 --degrees 10 --flipud 0.1 --hsv-v 0.55 --close-mosaic 15
+#
 # --vehide4 reconstruye el dataset limpio (sin fuga, 4 clases nativas) en
 # data/final_vehide4 y entrena con configs/dataset_vehide4.yaml. Cualquier otro
 # flag se pasa tal cual a train.py (y sobreescribe los defaults del modo).
