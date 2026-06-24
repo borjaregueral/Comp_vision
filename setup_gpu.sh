@@ -21,6 +21,10 @@
 #   bash setup_gpu.sh --vehide4 --imgsz 1280 --mask-ratio 1 --batch 8 \
 #        --scale 0.25 --degrees 10 --flipud 0.1 --hsv-v 0.55 --close-mosaic 15
 #
+#   # Tier 1.4 — desbalance: añade --cls-pw (peso por frecuencia inversa, BCE de
+#   # clase). Sweep {0,0.25,0.5,1}; usa un --project distinto por valor para no
+#   # pisar pesos. Ej.:  bash setup_gpu.sh --vehide4 --cls-pw 0.5 --project runs/damage_seg_vehide4_clspw05
+#
 # --vehide4 reconstruye el dataset limpio (sin fuga, 4 clases nativas) en
 # data/final_vehide4 y entrena con configs/dataset_vehide4.yaml. Cualquier otro
 # flag se pasa tal cual a train.py (y sobreescribe los defaults del modo).

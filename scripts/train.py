@@ -71,6 +71,7 @@ def train_phase1(
     workers: int = 16,
     cache: "bool | str" = True,
     mask_ratio: int = 4,
+    cls_pw: float = 0.0,
 ) -> Path:
     """Fase 1: Entrena con backbone congelado (warm-up)."""
     from ultralytics import YOLO
@@ -86,6 +87,7 @@ def train_phase1(
     console.print(f"  Imagen:       [cyan]{imgsz}px[/]")
     console.print(f"  Batch:        [cyan]{batch}[/]")
     console.print(f"  Freeze:       [cyan]10 capas (backbone)[/]")
+    console.print(f"  cls_pw:       [cyan]{cls_pw}[/]")
     console.print()
 
     results = model.train(
@@ -102,6 +104,7 @@ def train_phase1(
         workers=workers,
         cache=cache,
         mask_ratio=mask_ratio,
+        cls_pw=cls_pw,
         project=project,
         name="phase1_frozen",
         exist_ok=True,
@@ -141,6 +144,7 @@ def train_phase2(
     flipud: float = 0.0,
     hsv_v: float = 0.4,
     close_mosaic: int = 10,
+    cls_pw: float = 0.0,
 ) -> Path:
     """Fase 2: Fine-tuning completo con augmentaciones."""
     from ultralytics import YOLO
@@ -159,6 +163,7 @@ def train_phase2(
     console.print(f"  LR:           [cyan]0.001 → 0.00001[/]")
     console.print(f"  Patience:     [cyan]50 epochs[/]")
     console.print(f"  Mask ratio:   [cyan]{mask_ratio}[/]")
+    console.print(f"  cls_pw:       [cyan]{cls_pw}[/]")
     console.print(f"  Aug (fina):   [cyan]degrees={degrees} scale={scale} flipud={flipud} "
                   f"hsv_v={hsv_v} close_mosaic={close_mosaic}[/]")
     console.print()
@@ -195,6 +200,7 @@ def train_phase2(
         workers=workers,
         cache=cache,
         mask_ratio=mask_ratio,
+        cls_pw=cls_pw,
         project=project,
         name="phase2_finetune",
         exist_ok=True,
@@ -295,6 +301,16 @@ def parse_args():
              "Tier 1.3 usa 15: cerrar el mosaic al final cierra el reality gap. "
              "[YOLOX close_mosaic 2107.08430]",
     )
+    # ── Desbalance de clases (Tier 1.4) ─────────────────────────────────
+    parser.add_argument(
+        "--cls-pw", type=float, default=0.0,
+        help="Peso por frecuencia inversa de clase en la loss de clasificación "
+             "(default: 0.0 = desactivado, el de Ultralytics; rango válido [0,1]). "
+             "Ultralytics calcula (1/frecuencia)**cls_pw normalizado a media 1.0 y lo "
+             "aplica a la BCE de clase. Sweep del piloto: {0, 0.25, 0.5, 1.0} para subir "
+             "las clases raras (broken_light/crack) sin tocar el muestreo. RFS suave "
+             "[1908.03195] es el paso siguiente si esto no basta.",
+    )
     parser.add_argument("--epochs-phase1", type=int, default=20, help="Epochs fase 1 (default: 20)")
     parser.add_argument("--epochs-phase2", type=int, default=280, help="Epochs fase 2 (default: 280)")
     parser.add_argument(
@@ -358,6 +374,7 @@ def main():
             workers=args.workers,
             cache=cache_val,
             mask_ratio=args.mask_ratio,
+            cls_pw=args.cls_pw,
         )
 
     if args.phase1_only:
@@ -395,6 +412,7 @@ def main():
         flipud=args.flipud,
         hsv_v=args.hsv_v,
         close_mosaic=args.close_mosaic,
+        cls_pw=args.cls_pw,
     )
 
     # ── Resumen ───────────────────────────────────────────────────
