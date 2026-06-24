@@ -136,6 +136,11 @@ def train_phase2(
     workers: int = 16,
     cache: "bool | str" = True,
     mask_ratio: int = 4,
+    degrees: float = 15.0,
+    scale: float = 0.5,
+    flipud: float = 0.0,
+    hsv_v: float = 0.4,
+    close_mosaic: int = 10,
 ) -> Path:
     """Fase 2: Fine-tuning completo con augmentaciones."""
     from ultralytics import YOLO
@@ -153,6 +158,9 @@ def train_phase2(
     console.print(f"  Optimizer:    [cyan]AdamW[/]")
     console.print(f"  LR:           [cyan]0.001 → 0.00001[/]")
     console.print(f"  Patience:     [cyan]50 epochs[/]")
+    console.print(f"  Mask ratio:   [cyan]{mask_ratio}[/]")
+    console.print(f"  Aug (fina):   [cyan]degrees={degrees} scale={scale} flipud={flipud} "
+                  f"hsv_v={hsv_v} close_mosaic={close_mosaic}[/]")
     console.print()
 
     results = model.train(
@@ -165,17 +173,21 @@ def train_phase2(
         lrf=0.01,
         dropout=0.1,
         # ── Augmentaciones optimizadas para daños ──
+        # degrees/scale/flipud/hsv_v/close_mosaic son configurables (Tier 1.3):
+        # el down-scale de mosaic encoge cracks de 1-2px y cerrar mosaic al final
+        # cierra el reality gap. Defaults = perfil baseline (A/B reproducible).
         mosaic=1.0,
         mixup=0.15,
         copy_paste=0.3,       # Copia daños a otras ubicaciones
-        degrees=15.0,
+        degrees=degrees,
         translate=0.2,
-        scale=0.5,
-        flipud=0.0,           # NO voltear vertical
+        scale=scale,
+        close_mosaic=close_mosaic,
+        flipud=flipud,
         fliplr=0.5,
         hsv_h=0.015,
         hsv_s=0.7,
-        hsv_v=0.4,
+        hsv_v=hsv_v,
         # ── Control ──
         patience=50,
         amp=amp,
@@ -253,6 +265,35 @@ def parse_args():
         help="Downsample de las máscaras GT para la loss de segmentación (default: 4, "
              "el de Ultralytics). Usa 1 para daños finos (rayones/grietas): con 4 una "
              "raya de 1-2px se vuelve sub-pixel y desaparece de la supervisión.",
+    )
+    # ── Augmentación fina-objeto (Tier 1.3) ─────────────────────────────
+    # Defaults = perfil baseline (run 1.1). El segundo run los baja/sube para
+    # atacar el suelo de scratch/crack: --scale 0.25 --degrees 10 --flipud 0.1
+    #   --hsv-v 0.55 --close-mosaic 15. Solo afectan a la fase 2 (fine-tune).
+    parser.add_argument(
+        "--degrees", type=float, default=15.0,
+        help="Rotación máxima en grados, fase 2 (default: 15). Tier 1.3 usa 10.",
+    )
+    parser.add_argument(
+        "--scale", type=float, default=0.5,
+        help="Ganancia de escala del mosaic, fase 2 (default: 0.5). El down-scale "
+             "encoge cracks de 1-2px; Tier 1.3 lo baja a 0.25. [copy-paste 2012.07177]",
+    )
+    parser.add_argument(
+        "--flipud", type=float, default=0.0,
+        help="Prob. de volteo vertical, fase 2 (default: 0.0). Tier 1.3 usa 0.1: el "
+             "daño no tiene 'arriba' canónico, da variedad sin romper realismo.",
+    )
+    parser.add_argument(
+        "--hsv-v", type=float, default=0.4,
+        help="Ganancia de brillo HSV-V, fase 2 (default: 0.4). Tier 1.3 sube a 0.55 "
+             "para robustez ante luz/sombra de parking.",
+    )
+    parser.add_argument(
+        "--close-mosaic", type=int, default=10,
+        help="Epochs finales SIN mosaic, fase 2 (default: 10, el de Ultralytics). "
+             "Tier 1.3 usa 15: cerrar el mosaic al final cierra el reality gap. "
+             "[YOLOX close_mosaic 2107.08430]",
     )
     parser.add_argument("--epochs-phase1", type=int, default=20, help="Epochs fase 1 (default: 20)")
     parser.add_argument("--epochs-phase2", type=int, default=280, help="Epochs fase 2 (default: 280)")
@@ -349,6 +390,11 @@ def main():
         workers=args.workers,
         cache=cache_val,
         mask_ratio=args.mask_ratio,
+        degrees=args.degrees,
+        scale=args.scale,
+        flipud=args.flipud,
+        hsv_v=args.hsv_v,
+        close_mosaic=args.close_mosaic,
     )
 
     # ── Resumen ───────────────────────────────────────────────────
