@@ -56,18 +56,92 @@ def _build_colors(class_names: dict) -> dict:
 CLASS_COLORS_BGR = _build_colors(CLASS_NAMES)
 
 
-def run_validation(model, data_yaml: str, device: str = "auto") -> dict:
-    """Ejecuta validación de Ultralytics y extrae métricas."""
+def run_validation(model, data_yaml: str, device: str = "auto", tta: bool = False) -> dict:
+    """Ejecuta validación de Ultralytics y extrae métricas.
+
+    tta=True activa augment (test-time augmentation): más lento pero típicamente
+    +0.5–1.5 mAP (Tier 1.6). La val barre la confianza en un solo pase, así que de
+    aquí salen las curvas P/R/F1 que usa analyze_operating_point.
+    """
     console.print("[bold]Ejecutando validación en test set...[/]\n")
+    if tta:
+        console.print("  [cyan]TTA activado (augment=True): más lento, +0.5–1.5 mAP esperado[/]\n")
 
     metrics = model.val(
         data=data_yaml,
         split="test",
         verbose=True,
         device=device if device != "auto" else None,
+        augment=tta,
     )
 
     return metrics
+
+
+def analyze_operating_point(metrics, beta: float = 2.0) -> dict:
+    """Recomienda el umbral de confianza operativo para MÁSCARA (Tier 1.6).
+
+    Del barrido de confianza de la val (un solo pase) toma las curvas de Ultralytics
+    (px = eje de confianza; p_curve/r_curve/f1_curve = (nc, n)) y devuelve:
+      • f1_peak       — conf del pico de F1 (punto P/R balanceado).
+      • recall_biased — conf que maximiza F-beta (beta=2 → pondera recall el doble):
+                        el punto de despliegue del piloto ("no perder daño").
+    Promedia sobre las clases presentes para dar un umbral global desplegable.
+    """
+    seg = getattr(metrics, "seg", None)
+    out: dict = {"available": False}
+    if seg is None:
+        return out
+
+    px = np.asarray(getattr(seg, "px", []), dtype=float)         # (n,) eje de confianza
+    p_c = np.asarray(getattr(seg, "p_curve", []), dtype=float)   # (nc, n)
+    r_c = np.asarray(getattr(seg, "r_curve", []), dtype=float)
+    f1_c = np.asarray(getattr(seg, "f1_curve", []), dtype=float)
+    if px.size == 0 or f1_c.size == 0 or f1_c.ndim != 2 or p_c.shape != r_c.shape:
+        return out
+
+    # Media sobre clases presentes → curvas globales de longitud n.
+    p, r, f1 = p_c.mean(0), r_c.mean(0), f1_c.mean(0)
+    b2 = beta * beta
+    fbeta = (1 + b2) * p * r / (b2 * p + r + 1e-9)
+
+    i_f1, i_fb = int(np.argmax(f1)), int(np.argmax(fbeta))
+    out.update({
+        "available": True,
+        "beta": beta,
+        "f1_peak": {
+            "conf": float(px[i_f1]), "precision": float(p[i_f1]),
+            "recall": float(r[i_f1]), "f1": float(f1[i_f1]),
+        },
+        "recall_biased": {
+            "conf": float(px[i_fb]), "precision": float(p[i_fb]),
+            "recall": float(r[i_fb]), "f1": float(f1[i_fb]), "fbeta": float(fbeta[i_fb]),
+        },
+    })
+    return out
+
+
+def print_operating_point(op: dict):
+    """Imprime la recomendación de umbral operativo de máscara."""
+    if not op.get("available"):
+        console.print("\n[yellow]Umbral operativo: curvas de máscara no disponibles "
+                      "(¿sin detecciones en test?).[/]")
+        return
+    table = Table(title="🎯 Umbral operativo (máscara)")
+    table.add_column("Punto", style="cyan")
+    table.add_column("conf", justify="right", style="green")
+    table.add_column("Precision", justify="right")
+    table.add_column("Recall", justify="right", style="green")
+    table.add_column("F1", justify="right")
+    f1p, rb = op["f1_peak"], op["recall_biased"]
+    table.add_row("Pico F1", f"{f1p['conf']:.3f}", f"{f1p['precision']:.3f}",
+                  f"{f1p['recall']:.3f}", f"{f1p['f1']:.3f}")
+    table.add_row(f"Sesgado a recall (F{op['beta']:.0f})", f"{rb['conf']:.3f}",
+                  f"{rb['precision']:.3f}", f"{rb['recall']:.3f}", f"{rb['f1']:.3f}")
+    console.print()
+    console.print(table)
+    console.print(f"  [dim]Despliegue: conf≈{rb['conf']:.3f} (sesgado a recall, no perder "
+                  f"daño). Pico F1 en conf≈{f1p['conf']:.3f}.[/]")
 
 
 def extract_metrics(metrics) -> dict:
@@ -295,6 +369,16 @@ def parse_args():
     parser.add_argument("--output", type=Path, default=PROJECT_ROOT / "evaluation_results")
     parser.add_argument("--samples", type=int, default=20, help="Comparaciones GT vs pred")
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument(
+        "--tta", action="store_true",
+        help="Test-time augmentation (augment=True) en la val: más lento, +0.5–1.5 mAP "
+             "esperado (Tier 1.6).",
+    )
+    parser.add_argument(
+        "--beta", type=float, default=2.0,
+        help="Beta del F-beta para el umbral operativo sesgado a recall (default: 2.0 "
+             "→ recall pesa el doble; no perder daño). Tier 1.6.",
+    )
     return parser.parse_args()
 
 
@@ -325,11 +409,17 @@ def main():
 
     # Validación
     console.rule("[bold]Validación en Test Set[/]")
-    metrics = run_validation(model, args.data, args.device)
+    metrics = run_validation(model, args.data, args.device, tta=args.tta)
 
     # Extraer y mostrar métricas
     results = extract_metrics(metrics)
     print_metrics_table(results)
+
+    # Umbral operativo (Tier 1.6): pico F1 + punto sesgado a recall de la máscara
+    operating_point = analyze_operating_point(metrics, beta=args.beta)
+    print_operating_point(operating_point)
+    results["operating_point"] = operating_point
+    results["tta"] = bool(args.tta)
 
     # Guardar métricas JSON
     metrics_file = args.output / "metrics.json"
