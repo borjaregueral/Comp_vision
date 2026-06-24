@@ -123,7 +123,9 @@ def download_vehide(output_dir: Path, dry_run: bool = False) -> Path:
         console.print("[bold green]⬇ Descargando VehiDE desde Kaggle...[/]")
         kaggle.api.authenticate()
         kaggle.api.dataset_download_files(
-            "hendrichscullen/vehide-dataset",
+            # Slug actualizado: el dataset se renombró en Kaggle. El antiguo
+            # "hendrichscullen/vehide-dataset" devuelve 403 Forbidden.
+            "hendrichscullen/vehide-dataset-automatic-vehicle-damage-detection",
             path=str(dataset_dir),
             unzip=True,
         )
@@ -138,7 +140,8 @@ def download_vehide(output_dir: Path, dry_run: bool = False) -> Path:
     except Exception as e:
         log.error("Error descargando VehiDE: %s", e)
         log.info(
-            "Descarga manual: https://www.kaggle.com/datasets/hendrichscullen/vehide-dataset\n"
+            "Descarga manual: https://www.kaggle.com/datasets/"
+            "hendrichscullen/vehide-dataset-automatic-vehicle-damage-detection\n"
             "Descomprime en: %s", dataset_dir
         )
         raise
@@ -985,8 +988,13 @@ def main():
     console.print("\n[bold]Fusionando datasets...[/]")
     merged = merge_coco_datasets([ds for ds, _ in processed_datasets])
 
-    # Copiar imágenes al directorio unificado
-    unified_dir = UNIFIED_OUTPUT
+    # Copiar imágenes al directorio unificado. El destino se toma de
+    # config["paths"]["unified"] (p.ej. data/unified_vehide4) para no pisar el
+    # data/unified multi-fuente; si no está, se usa el constante por defecto.
+    cfg_unified = (config.get("paths", {}) or {}).get("unified")
+    unified_dir = Path(cfg_unified) if cfg_unified else UNIFIED_OUTPUT
+    if not unified_dir.is_absolute():
+        unified_dir = PROJECT_ROOT / unified_dir
     unified_dir.mkdir(parents=True, exist_ok=True)
 
     source_dirs = [ddir for _, ddir in processed_datasets]

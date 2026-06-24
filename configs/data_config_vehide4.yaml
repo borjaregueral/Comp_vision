@@ -1,0 +1,105 @@
+# ============================================================================
+# data_config_vehide4.yaml — VehiDE-only, 4 NATIVE classes (clean baseline)
+# ============================================================================
+# Purpose: rebuild the damage dataset from VehiDE's own human annotations ONLY,
+# with NO CLIP/auto_relabel re-typing and NO multi-source mixing. The 4 target
+# classes are exactly the VehiDE native labels (trầy sơn / móp lõm / rách / bể đèn).
+#
+# This config is consumed by BOTH:
+#   download_datasets.py --datasets vehide --config configs/data_config_vehide4.yaml
+#   unify_to_yolo.py     --config configs/data_config_vehide4.yaml   (split block below)
+#
+# Decisions:
+#   • thung (perforation) is EXCLUDED to honor "no punctures" and keep `dent`
+#     morphologically clean. To fold perforations into dent, change `thung: null`
+#     to `thung: dent`.
+#   • Glass / windows / tires already excluded (native labels + excluded_patterns).
+
+# --- Target classes (the 4 native VehiDE damage types) ---
+classes:
+  0: scratch
+  1: dent
+  2: crack
+  3: broken_light
+
+# --- Class mapping: VehiDE source label → target (null = exclude) ---
+class_mapping:
+  # VehiDE — real labels (Vietnamese) as they appear in *_via_annos.json
+  "tray_son": "scratch"          # trầy sơn = scratched / scuffed paint
+  "mop_lom": "dent"              # móp lõm = dent / deformation
+  "rach": "crack"                # rách = tear / crack (plastic, bumper)
+  "be_den": "broken_light"       # bể đèn = broken headlight / tail light
+  "thung": null                  # thủng = panel perforation → EXCLUDE (no punctures)
+  "mat_bo_phan": null            # mất bộ phận = missing part → EXCLUDE
+  "vo_kinh": null                # vỡ kính = broken glass → EXCLUDE
+
+  # VehiDE — English aliases (compat; not present in current data)
+  "scratch": "scratch"
+  "dent": "dent"
+  "crack": "crack"
+  "broken_lamp": "broken_light"
+  "broken_light": "broken_light"
+  "flat_tire": null
+  "tire_flat": null
+  "glass_shatter": null
+  "broken_glass": null
+
+# --- Excluded class patterns (substring, case-insensitive) ---
+excluded_patterns:
+  - "tire"
+  - "tyre"
+  - "flat"
+  - "glass"
+  - "windshield"
+  - "window"
+  - "luna"
+  - "cristal"
+  - "parabrisas"
+
+# --- Splits ---
+splits:
+  train: 0.7
+  val: 0.2
+  test: 0.1
+
+# --- Split strategy (consumed by unify_to_yolo.create_grouped_splits) ---
+# grouped  → leakage-free: near-duplicate images and same-vehicle/claim photos are
+#            grouped and assigned to a split as a unit (no image crosses splits).
+# stratified → legacy per-image shuffle (v1 behaviour; kept for reproducibility).
+split:
+  strategy: grouped
+  # Filename-based grouping is OFF by default (null) because a careless regex can
+  # collapse the whole dataset into one group (e.g. stripping digits from
+  # 'image_0001.jpg' → all share key 'image_') and silently starve val/test.
+  # With null, each image is its own group and pHash dedup (below) is the safety
+  # net. AFTER inspecting real VehiDE filenames, set a regex whose capture group 1
+  # is the vehicle/claim id — e.g. '^(.+?)_\d+$' for files like 'CLAIM1234_2.jpg'.
+  group_from_filename: null
+  dedup_phash: true              # merge near-duplicate images into the same group
+  phash_threshold: 6             # dHash Hamming distance <= this → duplicates
+
+# --- Quality filters ---
+min_bbox_area: 100               # minimum bbox area in px (w * h)
+min_polygon_points: 4            # minimum points per segmentation polygon
+max_aspect_ratio: 20.0           # maximum bbox aspect ratio (w / h)
+
+# --- Images ---
+image:
+  min_width: 320
+  min_height: 320
+  max_width: 8192
+  max_height: 8192
+  allowed_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".bmp"
+    - ".webp"
+
+# --- Paths ---
+paths:
+  raw: "data/raw"
+  unified: "data/unified_vehide4"
+  auto_labeled: "data/auto_labeled"
+  reviewed: "data/reviewed"
+  final: "data/final_vehide4"

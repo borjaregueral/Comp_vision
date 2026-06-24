@@ -97,15 +97,20 @@ def extract_metrics(metrics) -> dict:
         class_metrics = {}
         try:
             if cid in box_idx:
-                p, r, ap50, _ = metrics.box.class_result(box_idx.index(cid))
+                # class_result devuelve (p, r, ap50, ap) — el 4º es el mAP50-95 de
+                # esa clase. Lo guardamos: la puerta de decisión del piloto exige
+                # mAP50 *y* mAP50-95 POR CLASE (la media global esconde scratch/crack).
+                p, r, ap50, ap = metrics.box.class_result(box_idx.index(cid))
                 class_metrics["box_ap50"] = float(ap50)
+                class_metrics["box_ap50_95"] = float(ap)
                 class_metrics["precision"] = float(p)
                 class_metrics["recall"] = float(r)
                 pr, rc = class_metrics["precision"], class_metrics["recall"]
                 class_metrics["f1"] = 2 * pr * rc / (pr + rc) if (pr + rc) > 0 else 0.0
             if seg is not None and cid in seg_idx:
-                _, _, seg_ap50, _ = seg.class_result(seg_idx.index(cid))
+                _, _, seg_ap50, seg_ap = seg.class_result(seg_idx.index(cid))
                 class_metrics["mask_ap50"] = float(seg_ap50)
+                class_metrics["mask_ap50_95"] = float(seg_ap)
         except (IndexError, AttributeError):
             pass
 
@@ -138,7 +143,9 @@ def print_metrics_table(results: dict):
     table2 = Table(title="📊 Métricas por Clase")
     table2.add_column("Clase", style="cyan")
     table2.add_column("AP@50 (box)", justify="right")
+    table2.add_column("AP@50:95 (box)", justify="right")
     table2.add_column("AP@50 (mask)", justify="right")
+    table2.add_column("AP@50:95 (mask)", justify="right")
     table2.add_column("Precision", justify="right")
     table2.add_column("Recall", justify="right")
     table2.add_column("F1", justify="right", style="green")
@@ -149,7 +156,9 @@ def print_metrics_table(results: dict):
         table2.add_row(
             class_name,
             f"{m.get('box_ap50', 0):.4f}",
+            f"{m.get('box_ap50_95', 0):.4f}",
             f"{m.get('mask_ap50', 0):.4f}",
+            f"{m.get('mask_ap50_95', 0):.4f}",
             f"{m.get('precision', 0):.4f}",
             f"{m.get('recall', 0):.4f}",
             f"[{f1_color}]{f1:.4f}[/]",
